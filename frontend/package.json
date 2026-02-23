@@ -1,12 +1,15 @@
 {
-  "name": "temp_expo",
+  "name": "outfitvault-frontend",
   "version": "1.0.0",
+  "description": "Aplicación móvil de OutfitVault — React Native con Expo",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
   },
   "dependencies": {
     "@react-navigation/bottom-tabs": "^7.14.0",

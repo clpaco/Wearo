@@ -1,12 +1,12 @@
-# ── Dependencies ──
+# ── Dependencias ──
 node_modules/
 
-# ── Environment ──
+# ── Variables de entorno ──
 .env
 .env.local
 .env.*.local
 
-# ── Build output ──
+# ── Build / Compilación ──
 /build
 /dist
 frontend/dist/
@@ -16,7 +16,7 @@ backend/dist/
 .expo/
 web-build/
 
-# ── OS files ──
+# ── Archivos del sistema ──
 .DS_Store
 Thumbs.db
 
@@ -30,5 +30,5 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# ── Coverage ──
+# ── Cobertura de tests ──
 coverage/

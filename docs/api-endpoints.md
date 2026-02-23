@@ -1,67 +1,67 @@
-# OutfitVault — API Endpoints
+# OutfitVault — Endpoints de la API
 
-## Base URL
+## URL Base
 
 ```
 http://localhost:3000/api/v1
 ```
 
-## Authentication
+## Autenticación
 
-| Method | Endpoint              | Description            |
-|--------|-----------------------|------------------------|
-| POST   | `/auth/register`      | Register a new user    |
-| POST   | `/auth/login`         | Login & receive JWT    |
-| POST   | `/auth/refresh`       | Refresh access token   |
-| POST   | `/auth/logout`        | Invalidate token       |
+| Método | Endpoint              | Descripción                   |
+|--------|-----------------------|-------------------------------|
+| POST   | `/auth/register`      | Registrar un nuevo usuario    |
+| POST   | `/auth/login`         | Iniciar sesión y recibir JWT  |
+| POST   | `/auth/refresh`       | Refrescar token de acceso     |
+| POST   | `/auth/logout`        | Invalidar token               |
 
-## Wardrobe (Garments)
+## Armario (Prendas)
 
-| Method | Endpoint              | Description                     |
-|--------|-----------------------|---------------------------------|
-| GET    | `/garments`           | List all user garments          |
-| GET    | `/garments/:id`       | Get garment details             |
-| POST   | `/garments`           | Add a new garment (with image)  |
-| PUT    | `/garments/:id`       | Update garment info             |
-| DELETE | `/garments/:id`       | Delete a garment                |
+| Método | Endpoint              | Descripción                          |
+|--------|-----------------------|--------------------------------------|
+| GET    | `/garments`           | Listar todas las prendas del usuario |
+| GET    | `/garments/:id`       | Obtener detalles de una prenda       |
+| POST   | `/garments`           | Añadir nueva prenda (con imagen)     |
+| PUT    | `/garments/:id`       | Actualizar información de prenda     |
+| DELETE | `/garments/:id`       | Eliminar una prenda                  |
 
 ## Outfits
 
-| Method | Endpoint              | Description               |
-|--------|-----------------------|---------------------------|
-| GET    | `/outfits`            | List all user outfits     |
-| GET    | `/outfits/:id`        | Get outfit details        |
-| POST   | `/outfits`            | Create a new outfit       |
-| PUT    | `/outfits/:id`        | Update an outfit          |
-| DELETE | `/outfits/:id`        | Delete an outfit          |
+| Método | Endpoint              | Descripción                    |
+|--------|-----------------------|--------------------------------|
+| GET    | `/outfits`            | Listar todos los outfits       |
+| GET    | `/outfits/:id`        | Obtener detalles de un outfit  |
+| POST   | `/outfits`            | Crear un nuevo outfit          |
+| PUT    | `/outfits/:id`        | Actualizar un outfit           |
+| DELETE | `/outfits/:id`        | Eliminar un outfit             |
 
-## Calendar
+## Calendario
 
-| Method | Endpoint              | Description                          |
+| Método | Endpoint              | Descripción                                  |
+|--------|-----------------------|----------------------------------------------|
+| GET    | `/calendar`           | Obtener planes de outfit para rango de fechas|
+| POST   | `/calendar`           | Asignar outfit a una fecha                   |
+| PUT    | `/calendar/:id`       | Actualizar una entrada del calendario        |
+| DELETE | `/calendar/:id`       | Eliminar una entrada del calendario          |
+
+## Estadísticas
+
+| Método | Endpoint              | Descripción                          |
 |--------|-----------------------|--------------------------------------|
-| GET    | `/calendar`           | Get outfit plans for a date range    |
-| POST   | `/calendar`           | Assign outfit to a date              |
-| PUT    | `/calendar/:id`       | Update a calendar entry              |
-| DELETE | `/calendar/:id`       | Remove a calendar entry              |
+| GET    | `/stats/usage`        | Prendas más/menos usadas             |
+| GET    | `/stats/categories`   | Cantidad de prendas por categoría    |
+| GET    | `/stats/colors`       | Distribución por colores             |
 
-## Stats
+## Clima
 
-| Method | Endpoint              | Description                      |
-|--------|-----------------------|----------------------------------|
-| GET    | `/stats/usage`        | Most/least worn garments         |
-| GET    | `/stats/categories`   | Garment count by category        |
-| GET    | `/stats/colors`       | Color distribution               |
-
-## Weather
-
-| Method | Endpoint              | Description                        |
-|--------|-----------------------|------------------------------------|
-| GET    | `/weather?lat=&lon=`  | Get current weather for location   |
+| Método | Endpoint              | Descripción                              |
+|--------|-----------------------|------------------------------------------|
+| GET    | `/weather?lat=&lon=`  | Obtener clima actual para una ubicación  |
 
 ## Social
 
-| Method | Endpoint              | Description                  |
-|--------|-----------------------|------------------------------|
-| GET    | `/social/feed`        | Public outfit feed           |
-| POST   | `/social/:id/like`    | Like an outfit               |
-| DELETE | `/social/:id/like`    | Unlike an outfit             |
+| Método | Endpoint              | Descripción                      |
+|--------|-----------------------|----------------------------------|
+| GET    | `/social/feed`        | Feed público de outfits          |
+| POST   | `/social/:id/like`    | Dar like a un outfit             |
+| DELETE | `/social/:id/like`    | Quitar like de un outfit         |

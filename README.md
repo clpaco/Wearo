@@ -1,31 +1,31 @@
 # 🧥 OutfitVault
 
-> Your personal wardrobe manager — organize, plan, and share your outfits.
+> Tu gestor de armario personal — organiza, planifica y comparte tus outfits.
 
-## Features
+## Características
 
-- 👕 **Wardrobe** — Photograph and catalog every garment you own
-- 👔 **Outfits** — Combine garments into reusable outfit sets
-- 📅 **Calendar** — Plan your daily looks ahead of time
-- 🌤️ **Weather** — Get outfit suggestions based on local weather
-- 📊 **Stats** — Discover usage patterns and optimize your closet
-- 🌐 **Social** — Share your best outfits with the community
+- 👕 **Armario** — Fotografía y cataloga cada prenda que tengas
+- 👔 **Outfits** — Combina prendas en conjuntos reutilizables
+- 📅 **Calendario** — Planifica tu look diario con antelación
+- 🌤️ **Clima** — Obtén sugerencias de outfit según el clima local
+- 📊 **Estadísticas** — Descubre patrones de uso y optimiza tu armario
+- 🌐 **Social** — Comparte tus mejores outfits con la comunidad
 
-## Tech Stack
+## Stack Tecnológico
 
-| Layer    | Technology                         |
-|----------|------------------------------------|
-| Mobile   | React Native (Expo)                |
-| State    | Redux Toolkit                      |
-| Backend  | Node.js + Express                  |
-| Database | PostgreSQL                         |
-| Auth     | JWT + bcrypt                       |
-| Docs     | Swagger UI                         |
+| Capa       | Tecnología                         |
+|------------|------------------------------------|
+| Móvil      | React Native (Expo)                |
+| Estado     | Redux Toolkit                      |
+| Backend    | Node.js + Express                  |
+| Base Datos | PostgreSQL                         |
+| Auth       | JWT + bcrypt                       |
+| Docs API   | Swagger UI                         |
 
-## Getting Started
+## Primeros Pasos
 
 ```bash
-# Clone the repo
+# Clonar el repositorio
 git clone https://github.com/clpaco/OutfitVault.git
 cd OutfitVault
 
@@ -34,40 +34,40 @@ cd frontend
 npm install
 npx expo start
 
-# Backend (in a separate terminal)
+# Backend (en otra terminal)
 cd backend
 npm install
 npm run dev
 ```
 
-## Project Structure
+## Estructura del Proyecto
 
 ```
 OutfitVault/
-├── frontend/   # React Native (Expo) app
-├── backend/    # Express REST API
-└── docs/       # Documentation
+├── frontend/   # Aplicación React Native (Expo)
+├── backend/    # API REST con Express
+└── docs/       # Documentación
 ```
 
-## Documentation
+## Documentación
 
-- [Architecture](docs/architecture.md)
-- [API Endpoints](docs/api-endpoints.md)
-- [User Manual](docs/user-manual.md)
+- [Arquitectura](docs/architecture.md)
+- [Endpoints de la API](docs/api-endpoints.md)
+- [Manual de Usuario](docs/user-manual.md)
 
-## Branch Strategy
+## Estrategia de Ramas
 
-| Branch            | Purpose                     |
-|-------------------|-----------------------------|
-| `main`            | Production releases         |
-| `develop`         | Integration branch          |
-| `feat/auth`       | Authentication module       |
-| `feat/wardrobe`   | Wardrobe CRUD               |
-| `feat/outfits`    | Outfit creation             |
-| `feat/calendar`   | Calendar planning           |
-| `feat/stats`      | Usage statistics            |
-| `feat/social`     | Social feed & likes         |
+| Rama              | Propósito                    |
+|-------------------|------------------------------|
+| `main`            | Releases de producción       |
+| `develop`         | Rama de integración          |
+| `feat/auth`       | Módulo de autenticación      |
+| `feat/wardrobe`   | CRUD del armario             |
+| `feat/outfits`    | Creación de outfits          |
+| `feat/calendar`   | Planificación en calendario  |
+| `feat/stats`      | Estadísticas de uso          |
+| `feat/social`     | Feed social y likes          |
 
-## License
+## Licencia
 
 MIT

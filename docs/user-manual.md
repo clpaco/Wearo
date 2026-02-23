@@ -1,45 +1,45 @@
-# OutfitVault — User Manual
+# OutfitVault — Manual de Usuario
 
-## Getting Started
+## Empezar
 
-### 1. Create an Account
-Open the app and tap **Register**. Enter your email and a password (min. 8 characters).
+### 1. Crear una Cuenta
+Abre la app y pulsa **Registrarse**. Introduce tu email y una contraseña (mín. 8 caracteres).
 
-### 2. Log In
-Use your credentials to log in. The app remembers your session securely.
+### 2. Iniciar Sesión
+Usa tus credenciales para entrar. La app recuerda tu sesión de forma segura.
 
 ---
 
-## Features
+## Funcionalidades
 
-### 👕 Wardrobe
-- Tap the **+** button to add a new garment.
-- Take a photo or pick one from your gallery.
-- Assign a **category** (tops, bottoms, shoes, accessories…) and **color**.
-- Browse your wardrobe with filters and search.
+### 👕 Armario
+- Pulsa el botón **+** para añadir una nueva prenda.
+- Haz una foto o elige una de tu galería.
+- Asigna una **categoría** (tops, pantalones, zapatos, accesorios…) y un **color**.
+- Navega por tu armario con filtros y búsqueda.
 
 ### 👔 Outfits
-- Combine garments to create outfits.
-- Save your favorite combinations.
-- Rate outfits and add notes.
+- Combina prendas para crear outfits.
+- Guarda tus combinaciones favoritas.
+- Valora los outfits y añade notas.
 
-### 📅 Calendar
-- Plan what to wear each day.
-- View the month at a glance.
-- Get outfit suggestions based on the weather.
+### 📅 Calendario
+- Planifica qué ponerte cada día.
+- Visualiza el mes de un vistazo.
+- Recibe sugerencias de outfit según el clima.
 
-### 📊 Stats
-- See your most and least worn garments.
-- Analyze your wardrobe by color and category.
-- Track your style trends over time.
+### 📊 Estadísticas
+- Consulta tus prendas más y menos usadas.
+- Analiza tu armario por color y categoría.
+- Sigue las tendencias de tu estilo a lo largo del tiempo.
 
 ### 🌐 Social
-- Share outfits with the community.
-- Like and browse other users' outfits.
+- Comparte outfits con la comunidad.
+- Da like y explora los outfits de otros usuarios.
 
 ---
 
-## Tips
-- Keep your wardrobe photos on a **plain background** for best results.
-- Use the **weather integration** to get seasonal suggestions.
-- Review your **stats** monthly to spot unused items.
+## Consejos
+- Haz las fotos de tus prendas sobre un **fondo liso** para mejores resultados.
+- Usa la **integración con el clima** para obtener sugerencias de temporada.
+- Revisa tus **estadísticas** mensualmente para detectar prendas sin usar.

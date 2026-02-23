@@ -1,16 +1,16 @@
-# OutfitVault — Architecture
+# OutfitVault — Arquitectura
 
-## Overview
+## Descripción General
 
-OutfitVault is a full-stack mobile application for managing a personal wardrobe,
-creating outfits, and planning daily looks based on weather and calendar events.
+OutfitVault es una aplicación móvil full-stack para gestionar un armario personal,
+crear outfits y planificar looks diarios según el clima y eventos del calendario.
 
-## System Architecture
+## Arquitectura del Sistema
 
 ```
 ┌─────────────────────┐       ┌─────────────────────┐
-│   React Native App  │◄─────►│   Express REST API   │
-│   (Expo / Mobile)   │ HTTPS │   (Node.js Backend)  │
+│   App React Native  │◄─────►│   API REST Express   │
+│   (Expo / Móvil)    │ HTTPS │   (Backend Node.js)  │
 └─────────────────────┘       └──────────┬────────────┘
                                          │
                               ┌──────────▼────────────┐
@@ -18,47 +18,47 @@ creating outfits, and planning daily looks based on weather and calendar events.
                               └────────────────────────┘
 ```
 
-## Tech Stack
+## Stack Tecnológico
 
 ### Frontend
 - **Framework:** React Native (Expo)
-- **Navigation:** React Navigation v6
-- **State Management:** Redux Toolkit
-- **HTTP Client:** Axios
-- **Charts:** Victory Native
-- **Camera:** Expo Camera
-- **Secure Storage:** Expo SecureStore
+- **Navegación:** React Navigation v6
+- **Gestión de Estado:** Redux Toolkit
+- **Cliente HTTP:** Axios
+- **Gráficos:** Victory Native
+- **Cámara:** Expo Camera
+- **Almacenamiento Seguro:** Expo SecureStore
 
 ### Backend
-- **Runtime:** Node.js
+- **Entorno:** Node.js
 - **Framework:** Express
-- **Auth:** JWT + bcrypt
-- **Database:** PostgreSQL (pg driver)
-- **File Upload:** Multer
-- **Docs:** Swagger UI Express
+- **Autenticación:** JWT + bcrypt
+- **Base de Datos:** PostgreSQL (driver pg)
+- **Subida de Archivos:** Multer
+- **Documentación:** Swagger UI Express
 
-### External APIs
-- OpenWeatherMap — weather-based outfit suggestions
-- Remove.bg — background removal from garment photos
+### APIs Externas
+- OpenWeatherMap — sugerencias de outfit basadas en el clima
+- Remove.bg — eliminación de fondo en fotos de prendas
 
-## Directory Structure
+## Estructura de Directorios
 
 ```
 OutfitVault/
 ├── frontend/src/
-│   ├── screens/        # App screens (Login, Wardrobe, Outfits…)
-│   ├── components/     # Reusable UI components
-│   ├── navigation/     # React Navigation config
-│   ├── store/          # Redux slices & store config
-│   ├── services/       # API service layer (Axios)
-│   ├── hooks/          # Custom React hooks
-│   └── utils/          # Helpers & constants
+│   ├── screens/        # Pantallas (Login, Armario, Outfits…)
+│   ├── components/     # Componentes UI reutilizables
+│   ├── navigation/     # Configuración de React Navigation
+│   ├── store/          # Slices de Redux y configuración del store
+│   ├── services/       # Capa de servicios API (Axios)
+│   ├── hooks/          # Hooks personalizados de React
+│   └── utils/          # Helpers y constantes
 ├── backend/src/
-│   ├── routes/         # Express route definitions
-│   ├── controllers/    # Request handlers
-│   ├── models/         # Database models
-│   ├── middleware/      # Auth, error handling, upload
-│   ├── services/       # Business logic layer
-│   └── config/         # DB connection, env config
-└── docs/               # Project documentation
+│   ├── routes/         # Definiciones de rutas Express
+│   ├── controllers/    # Manejadores de peticiones
+│   ├── models/         # Modelos de base de datos
+│   ├── middleware/      # Auth, manejo de errores, subida
+│   ├── services/       # Capa de lógica de negocio
+│   └── config/         # Conexión a BD, configuración de entorno
+└── docs/               # Documentación del proyecto
 ```

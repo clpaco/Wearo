@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchMonthEntries, assignOutfitToDate, removeEntry, setSelectedDate } from '../store/calendarSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
+import ScreenHeader from '../components/ScreenHeader';
 
 const DAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MONTHS_ES = [
@@ -97,13 +98,7 @@ const CalendarScreen = ({ navigation }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: c.text }]}>Calendario</Text>
-                <View style={{ width: 60 }} />
-            </View>
+            <ScreenHeader title="Calendario" />
 
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Navegación del mes */}

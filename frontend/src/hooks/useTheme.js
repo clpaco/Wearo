@@ -40,6 +40,22 @@ const lightTheme = {
         inputText: '#1A1A2E',
         placeholder: '#9CA3AF',
 
+        // Tabs
+        tabBar: '#FFFFFF',
+        tabBarBorder: '#E5E7EB',
+        tabActive: '#6C5CE7',
+        tabInactive: '#9CA3AF',
+
+        // Gradientes
+        gradientPrimary: ['#6C5CE7', '#A29BFE'],
+        gradientAccent: ['#00CEC9', '#55EFC4'],
+        gradientWarm: ['#FDCB6E', '#E17055'],
+
+        // Sombras unificadas
+        shadowSm: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+        shadowMd: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.10, shadowRadius: 8, elevation: 4 },
+        shadowLg: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+
         // Barra de estado
         statusBar: 'dark-content',
     },
@@ -81,6 +97,22 @@ const darkTheme = {
         inputBorder: '#2D2D44',
         inputText: '#F5F5F7',
         placeholder: '#6B7280',
+
+        // Tabs
+        tabBar: '#1A1A2E',
+        tabBarBorder: '#2D2D44',
+        tabActive: '#A29BFE',
+        tabInactive: '#6B7280',
+
+        // Gradientes
+        gradientPrimary: ['#6C5CE7', '#A29BFE'],
+        gradientAccent: ['#00CEC9', '#55EFC4'],
+        gradientWarm: ['#FDCB6E', '#E17055'],
+
+        // Sombras unificadas
+        shadowSm: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 2 },
+        shadowMd: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
+        shadowLg: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 8 },
 
         // Barra de estado
         statusBar: 'light-content',

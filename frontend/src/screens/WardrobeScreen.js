@@ -7,6 +7,9 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchGarments, removeGarment, setFilter } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
+import { IMAGE_BASE_URL } from '../services/api';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
 
 const CATEGORIES = [
     { key: null, label: 'Todas', icon: '👗' },
@@ -18,8 +21,6 @@ const CATEGORIES = [
     { key: 'vestidos', label: 'Vestidos', icon: '👗' },
     { key: 'otro', label: 'Otro', icon: '🏷️' },
 ];
-
-const BASE_URL = 'http://10.0.2.2:3000'; // Android emulator
 
 const WardrobeScreen = ({ navigation }) => {
     const dispatch = useDispatch();
@@ -59,7 +60,7 @@ const WardrobeScreen = ({ navigation }) => {
         >
             {item.image_url ? (
                 <Image
-                    source={{ uri: `${BASE_URL}${item.image_url}` }}
+                    source={{ uri: `${IMAGE_BASE_URL}${item.image_url}` }}
                     style={styles.garmentImage}
                     resizeMode="cover"
                 />
@@ -92,28 +93,26 @@ const WardrobeScreen = ({ navigation }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <View>
-                    <Text style={[styles.headerTitle, { color: c.text }]}>Mi Armario</Text>
-                    <Text style={[styles.headerSubtitle, { color: c.textSecondary }]}>
-                        {garments.length} prenda{garments.length !== 1 ? 's' : ''}
-                    </Text>
-                </View>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity
-                        style={[styles.themeBtn, { backgroundColor: c.surfaceVariant }]}
-                        onPress={toggleTheme}
-                    >
-                        <Text style={{ fontSize: 18 }}>{isDark ? '☀️' : '🌙'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.addBtn, { backgroundColor: c.primary }]}
-                        onPress={() => navigation.navigate('AddGarment')}
-                    >
-                        <Text style={styles.addBtnText}>+ Añadir</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <ScreenHeader
+                title="Mi Armario"
+                subtitle={`${garments.length} prenda${garments.length !== 1 ? 's' : ''}`}
+                rightAction={
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={[styles.themeBtn, { backgroundColor: c.surfaceVariant }]}
+                            onPress={toggleTheme}
+                        >
+                            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.addBtn, { backgroundColor: c.primary }]}
+                            onPress={() => navigation.navigate('AddGarment')}
+                        >
+                            <Text style={styles.addBtnText}>+</Text>
+                        </TouchableOpacity>
+                    </View>
+                }
+            />
 
             {/* Filtros de categoría */}
             <View style={styles.filtersRow}>
@@ -152,15 +151,12 @@ const WardrobeScreen = ({ navigation }) => {
                     <ActivityIndicator size="large" color={c.primary} />
                 </View>
             ) : garments.length === 0 ? (
-                <View style={styles.centered}>
-                    <Text style={{ fontSize: 64, marginBottom: 16 }}>👕</Text>
-                    <Text style={[styles.emptyTitle, { color: c.text }]}>
-                        ¡Tu armario está vacío!
-                    </Text>
-                    <Text style={[styles.emptyText, { color: c.textSecondary }]}>
-                        Pulsa "+ Añadir" para agregar tu primera prenda
-                    </Text>
-                </View>
+                <EmptyState
+                    icon="👕"
+                    title="¡Tu armario está vacío!"
+                    description="Pulsa el botón + para agregar tu primera prenda"
+                    action={{ label: '+ Añadir prenda', onPress: () => navigation.navigate('AddGarment') }}
+                />
             ) : (
                 <FlatList
                     data={garments}
@@ -180,18 +176,7 @@ const WardrobeScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 56,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-    },
-    headerTitle: { fontSize: 26, fontWeight: '800' },
-    headerSubtitle: { fontSize: 14, marginTop: 2 },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     themeBtn: {
         width: 40, height: 40, borderRadius: 20,
         justifyContent: 'center', alignItems: 'center',
@@ -226,9 +211,6 @@ const styles = StyleSheet.create({
     garmentCategory: { fontSize: 13, fontWeight: '600', marginTop: 2, textTransform: 'capitalize' },
     garmentBrand: { fontSize: 12, marginTop: 2 },
     favBadge: { position: 'absolute', top: 8, right: 8 },
-    centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-    emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-    emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
 });
 
 export default WardrobeScreen;

@@ -5,6 +5,7 @@ import {
     StyleSheet, KeyboardAvoidingView, Platform,
     ActivityIndicator, Alert, StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearError } from '../store/authSlice';
 import { useTheme } from '../hooks/useTheme';
@@ -28,8 +29,9 @@ const LoginScreen = ({ navigation }) => {
     };
 
     return (
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: c.background }]}>
         <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor: c.background }]}
+            style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar barStyle={c.statusBar} />
@@ -120,10 +122,14 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+    },
     container: {
         flex: 1,
         justifyContent: 'center',

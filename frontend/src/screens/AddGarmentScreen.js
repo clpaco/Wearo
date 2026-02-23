@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useDispatch } from 'react-redux';
 import { addGarment, editGarment } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
+import ScreenHeader from '../components/ScreenHeader';
 
 const CATEGORIES = [
     'camisetas', 'pantalones', 'zapatos', 'chaquetas',
@@ -123,15 +124,10 @@ const AddGarmentScreen = ({ navigation, route }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: c.text }]}>
-                    {isEditing ? 'Editar Prenda' : 'Nueva Prenda'}
-                </Text>
-                <View style={{ width: 60 }} />
-            </View>
+            <ScreenHeader
+                title={isEditing ? 'Editar Prenda' : 'Nueva Prenda'}
+                onBack={() => navigation.goBack()}
+            />
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Imagen */}

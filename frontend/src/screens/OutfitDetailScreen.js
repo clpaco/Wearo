@@ -7,8 +7,8 @@ import {
 import { useDispatch } from 'react-redux';
 import { removeOutfit } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
-
-const BASE_URL = 'http://10.0.2.2:3000';
+import { IMAGE_BASE_URL } from '../services/api';
+import ScreenHeader from '../components/ScreenHeader';
 
 const OutfitDetailScreen = ({ navigation, route }) => {
     const { outfit } = route.params;
@@ -39,15 +39,7 @@ const OutfitDetailScreen = ({ navigation, route }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: c.text }]} numberOfLines={1}>
-                    {outfit.name}
-                </Text>
-                <View style={{ width: 50 }} />
-            </View>
+            <ScreenHeader title={outfit.name} onBack={() => navigation.goBack()} />
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Info */}
@@ -89,7 +81,7 @@ const OutfitDetailScreen = ({ navigation, route }) => {
                             style={[styles.garmentCard, { backgroundColor: c.surface, borderColor: c.border }]}
                         >
                             {g.image_url ? (
-                                <Image source={{ uri: `${BASE_URL}${g.image_url}` }} style={styles.garmentImg} />
+                                <Image source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }} style={styles.garmentImg} />
                             ) : (
                                 <View style={[styles.garmentPlaceholder, { backgroundColor: c.surfaceVariant }]}>
                                     <Text style={{ fontSize: 28 }}>👕</Text>

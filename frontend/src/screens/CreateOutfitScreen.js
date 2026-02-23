@@ -8,8 +8,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchGarments } from '../store/wardrobeSlice';
 import { addOutfit } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
-
-const BASE_URL = 'http://10.0.2.2:3000';
+import { IMAGE_BASE_URL } from '../services/api';
+import ScreenHeader from '../components/ScreenHeader';
 
 const OCCASIONS = ['casual', 'trabajo', 'formal', 'deporte', 'fiesta', 'otro'];
 
@@ -71,7 +71,7 @@ const CreateOutfitScreen = ({ navigation }) => {
                 activeOpacity={0.8}
             >
                 {item.image_url ? (
-                    <Image source={{ uri: `${BASE_URL}${item.image_url}` }} style={styles.garmentImg} />
+                    <Image source={{ uri: `${IMAGE_BASE_URL}${item.image_url}` }} style={styles.garmentImg} />
                 ) : (
                     <View style={[styles.garmentPlaceholder, { backgroundColor: c.surfaceVariant }]}>
                         <Text style={{ fontSize: 24 }}>👕</Text>
@@ -94,13 +94,7 @@ const CreateOutfitScreen = ({ navigation }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: c.text }]}>Crear Outfit</Text>
-                <View style={{ width: 60 }} />
-            </View>
+            <ScreenHeader title="Crear Outfit" onBack={() => navigation.goBack()} />
 
             {/* Nombre */}
             <View style={styles.fieldRow}>

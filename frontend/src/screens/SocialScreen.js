@@ -8,6 +8,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchFeed, toggleLike, shareOutfit, resetFeed } from '../store/socialSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
+import { IMAGE_BASE_URL } from '../services/api';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
 
 const SocialScreen = ({ navigation }) => {
     const dispatch = useDispatch();
@@ -118,7 +121,7 @@ const SocialScreen = ({ navigation }) => {
                         {garments.slice(0, 4).map((g, idx) => (
                             <View key={g.id || idx} style={[styles.garmentThumb, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
                                 {g.image_url ? (
-                                    <Image source={{ uri: g.image_url }} style={styles.garmentImg} />
+                                    <Image source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }} style={styles.garmentImg} />
                                 ) : (
                                     <View style={styles.garmentPlaceholder}>
                                         <Text style={{ fontSize: 18 }}>👕</Text>
@@ -166,15 +169,14 @@ const SocialScreen = ({ navigation }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: c.text }]}>Social</Text>
-                <TouchableOpacity onPress={openShareModal}>
-                    <Text style={[styles.shareHeaderBtn, { color: c.primary }]}>+ Compartir</Text>
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Social"
+                rightAction={
+                    <TouchableOpacity onPress={openShareModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>+ Compartir</Text>
+                    </TouchableOpacity>
+                }
+            />
 
             {/* Feed */}
             <FlatList
@@ -195,19 +197,12 @@ const SocialScreen = ({ navigation }) => {
                 }
                 ListEmptyComponent={
                     !isLoading ? (
-                        <View style={styles.emptyBox}>
-                            <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>🌐</Text>
-                            <Text style={[styles.emptyTitle, { color: c.text }]}>Feed vacío</Text>
-                            <Text style={[styles.emptyText, { color: c.textMuted }]}>
-                                Sé el primero en compartir un outfit con la comunidad.
-                            </Text>
-                            <TouchableOpacity
-                                style={[styles.emptyBtn, { backgroundColor: c.primary }]}
-                                onPress={openShareModal}
-                            >
-                                <Text style={styles.emptyBtnText}>Compartir un Outfit</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <EmptyState
+                            icon="🌐"
+                            title="Feed vacío"
+                            description="Sé el primero en compartir un outfit con la comunidad."
+                            action={{ label: 'Compartir un Outfit', onPress: openShareModal }}
+                        />
                     ) : null
                 }
             />
@@ -294,13 +289,6 @@ const SocialScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
-    },
-    backBtn: { fontSize: 16, fontWeight: '600' },
-    headerTitle: { fontSize: 22, fontWeight: '800' },
-    shareHeaderBtn: { fontSize: 14, fontWeight: '700' },
     feedContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
 
     postCard: {
@@ -347,12 +335,6 @@ const styles = StyleSheet.create({
     actionLabel: { fontSize: 13 },
     seasonTag: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
     seasonTagText: { fontSize: 12, fontWeight: '600' },
-
-    emptyBox: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 32 },
-    emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-    emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 20 },
-    emptyBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
-    emptyBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', padding: 20 },

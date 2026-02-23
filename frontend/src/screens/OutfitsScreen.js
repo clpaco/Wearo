@@ -7,8 +7,9 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOutfits, removeOutfit } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
-
-const BASE_URL = 'http://10.0.2.2:3000';
+import { IMAGE_BASE_URL } from '../services/api';
+import ScreenHeader from '../components/ScreenHeader';
+import EmptyState from '../components/EmptyState';
 
 const OutfitsScreen = ({ navigation }) => {
     const dispatch = useDispatch();
@@ -41,7 +42,7 @@ const OutfitsScreen = ({ navigation }) => {
                         g.image_url ? (
                             <Image
                                 key={g.id}
-                                source={{ uri: `${BASE_URL}${g.image_url}` }}
+                                source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }}
                                 style={[styles.mosaicImg, garments.length === 1 && styles.mosaicSingle]}
                             />
                         ) : (
@@ -83,18 +84,18 @@ const OutfitsScreen = ({ navigation }) => {
             <StatusBar barStyle={c.statusBar} />
 
             {/* Header */}
-            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: c.text }]}>Mis Outfits</Text>
-                <TouchableOpacity
-                    style={[styles.addBtn, { backgroundColor: c.primary }]}
-                    onPress={() => navigation.navigate('CreateOutfit')}
-                >
-                    <Text style={styles.addBtnText}>+ Crear</Text>
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Mis Outfits"
+                subtitle={`${outfits.length} outfit${outfits.length !== 1 ? 's' : ''}`}
+                rightAction={
+                    <TouchableOpacity
+                        style={[styles.addBtn, { backgroundColor: c.primary }]}
+                        onPress={() => navigation.navigate('CreateOutfit')}
+                    >
+                        <Text style={styles.addBtnText}>+</Text>
+                    </TouchableOpacity>
+                }
+            />
 
             {/* Lista */}
             {isLoading && outfits.length === 0 ? (
@@ -102,13 +103,12 @@ const OutfitsScreen = ({ navigation }) => {
                     <ActivityIndicator size="large" color={c.primary} />
                 </View>
             ) : outfits.length === 0 ? (
-                <View style={styles.centered}>
-                    <Text style={{ fontSize: 64, marginBottom: 16 }}>👔</Text>
-                    <Text style={[styles.emptyTitle, { color: c.text }]}>¡Sin outfits aún!</Text>
-                    <Text style={[styles.emptyText, { color: c.textSecondary }]}>
-                        Combina tus prendas para crear tu primer outfit
-                    </Text>
-                </View>
+                <EmptyState
+                    icon="👔"
+                    title="¡Sin outfits aún!"
+                    description="Combina tus prendas para crear tu primer outfit"
+                    action={{ label: '+ Crear Outfit', onPress: () => navigation.navigate('CreateOutfit') }}
+                />
             ) : (
                 <FlatList
                     data={outfits}
@@ -126,16 +126,8 @@ const OutfitsScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
-    },
-    backBtn: { fontSize: 16, fontWeight: '600' },
-    headerTitle: { fontSize: 22, fontWeight: '800' },
-    addBtn: {
-        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
-    },
-    addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    addBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 20, lineHeight: 22 },
     listContent: { padding: 16 },
     outfitCard: {
         borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 16,
@@ -156,8 +148,6 @@ const styles = StyleSheet.create({
     outfitMeta: { fontSize: 14, marginTop: 4 },
     wornCount: { fontSize: 12, marginTop: 2 },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-    emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-    emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
 });
 
 export default OutfitsScreen;

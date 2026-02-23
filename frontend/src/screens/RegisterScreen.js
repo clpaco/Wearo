@@ -5,6 +5,7 @@ import {
     StyleSheet, KeyboardAvoidingView, Platform,
     ActivityIndicator, ScrollView, StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { registerUser, clearError } from '../store/authSlice';
 import { useTheme } from '../hooks/useTheme';
@@ -49,8 +50,9 @@ const RegisterScreen = ({ navigation }) => {
     const displayError = localError || error;
 
     return (
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: c.background }]}>
         <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor: c.background }]}
+            style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar barStyle={c.statusBar} />
@@ -161,10 +163,14 @@ const RegisterScreen = ({ navigation }) => {
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+    },
     container: {
         flex: 1,
     },

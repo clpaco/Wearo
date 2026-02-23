@@ -7,8 +7,7 @@ import {
 import { useDispatch } from 'react-redux';
 import { removeGarment } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
-
-const BASE_URL = 'http://10.0.2.2:3000';
+import { IMAGE_BASE_URL } from '../services/api';
 
 const GarmentDetailScreen = ({ navigation, route }) => {
     const { garment } = route.params;
@@ -52,7 +51,7 @@ const GarmentDetailScreen = ({ navigation, route }) => {
                 {/* Imagen */}
                 {garment.image_url ? (
                     <Image
-                        source={{ uri: `${BASE_URL}${garment.image_url}` }}
+                        source={{ uri: `${IMAGE_BASE_URL}${garment.image_url}` }}
                         style={styles.heroImage}
                         resizeMode="cover"
                     />

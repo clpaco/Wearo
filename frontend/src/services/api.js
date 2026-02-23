@@ -2,9 +2,9 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// Cambia esta URL cuando despliegues el backend
-const BASE_URL = 'http://10.0.2.2:3000/api/v1'; // Android emulator
-// const BASE_URL = 'http://localhost:3000/api/v1'; // iOS / Web
+// Cambia esta IP a la de tu computadora en la red local
+const BASE_URL = 'http://172.20.10.2:3000/api/v1';
+export const IMAGE_BASE_URL = 'http://172.20.10.2:3000';
 
 const api = axios.create({
     baseURL: BASE_URL,

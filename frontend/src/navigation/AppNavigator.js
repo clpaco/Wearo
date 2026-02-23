@@ -11,6 +11,9 @@ import { useTheme } from '../hooks/useTheme';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import HomeScreen from '../screens/HomeScreen';
+import WardrobeScreen from '../screens/WardrobeScreen';
+import AddGarmentScreen from '../screens/AddGarmentScreen';
+import GarmentDetailScreen from '../screens/GarmentDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -39,9 +42,13 @@ const AppStack = () => {
             screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: theme.colors.background },
+                animation: 'slide_from_right',
             }}
         >
             <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Wardrobe" component={WardrobeScreen} />
+            <Stack.Screen name="AddGarment" component={AddGarmentScreen} />
+            <Stack.Screen name="GarmentDetail" component={GarmentDetailScreen} />
         </Stack.Navigator>
     );
 };

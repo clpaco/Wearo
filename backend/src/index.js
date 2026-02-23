@@ -1,10 +1,11 @@
 // Servidor principal de OutfitVault API
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const dotenv = require('dotenv');
 
-// Cargar variables de entorno
-dotenv.config({ path: '../.env' });
+// Cargar variables de entorno desde la raíz del proyecto
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,8 +24,10 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// TODO: Importar y registrar rutas
-// app.use('/api/v1/auth', require('./routes/auth.routes'));
+// Rutas de la API
+app.use('/api/v1/auth', require('./routes/auth.routes'));
+
+// TODO: Activar cuando se implementen
 // app.use('/api/v1/garments', require('./routes/garments.routes'));
 // app.use('/api/v1/outfits', require('./routes/outfits.routes'));
 // app.use('/api/v1/calendar', require('./routes/calendar.routes'));

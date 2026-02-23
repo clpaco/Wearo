@@ -39,8 +39,6 @@ const HomeStack = () => (
     <Stack.Navigator screenOptions={stackOptions}>
         <Stack.Screen name="HomeScreen" component={HomeScreen} />
         <Stack.Screen name="Stats" component={StatsScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
     </Stack.Navigator>
 );
 
@@ -70,6 +68,13 @@ const SocialStack = () => (
     <Stack.Navigator screenOptions={stackOptions}>
         <Stack.Screen name="SocialScreen" component={SocialScreen} />
         <Stack.Screen name="UserProfile" component={ProfileScreen} />
+    </Stack.Navigator>
+);
+
+const ProfileStack = () => (
+    <Stack.Navigator screenOptions={stackOptions}>
+        <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
     </Stack.Navigator>
 );
 
@@ -104,6 +109,7 @@ const AppTabs = () => {
                         Outfits: focused ? 'albums' : 'albums-outline',
                         Calendario: focused ? 'calendar' : 'calendar-outline',
                         Social: focused ? 'people' : 'people-outline',
+                        Perfil: focused ? 'person-circle' : 'person-circle-outline',
                     };
                     return <Ionicons name={icons[route.name]} size={size} color={color} />;
                 },
@@ -114,6 +120,7 @@ const AppTabs = () => {
             <Tab.Screen name="Outfits" component={OutfitsStack} />
             <Tab.Screen name="Calendario" component={CalendarStack} />
             <Tab.Screen name="Social" component={SocialStack} />
+            <Tab.Screen name="Perfil" component={ProfileStack} />
         </Tab.Navigator>
     );
 };

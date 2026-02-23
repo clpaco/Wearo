@@ -31,6 +31,12 @@ export const getWeather = async (lat, lon) => {
     return data;
 };
 
+// Obtener clima por nombre de ciudad
+export const getWeatherByCity = async (city) => {
+    const { data } = await api.get(`/calendar/weather?city=${encodeURIComponent(city)}`);
+    return data.clima;
+};
+
 // Obtener pronóstico 5 días
 export const getForecast = async (lat, lon) => {
     const { data } = await api.get(`/calendar/forecast?lat=${lat}&lon=${lon}`);

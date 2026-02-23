@@ -65,18 +65,22 @@ const remove = async (req, res) => {
     }
 };
 
-// GET /api/v1/calendar/weather?lat=&lon= — Clima actual
+// GET /api/v1/calendar/weather?city= ó ?lat=&lon= — Clima actual
 const getWeather = async (req, res) => {
     try {
-        const { lat, lon } = req.query;
-        if (!lat || !lon) {
+        const { lat, lon, city } = req.query;
+        let weather;
+        if (city) {
+            weather = await weatherService.getWeatherByCity(city);
+        } else if (lat && lon) {
+            weather = await weatherService.getCurrentWeather(lat, lon);
+        } else {
             return res.status(400).json({
                 error: true,
-                mensaje: 'Parámetros lat y lon son obligatorios',
+                mensaje: 'Proporciona city o los parámetros lat y lon',
             });
         }
 
-        const weather = await weatherService.getCurrentWeather(lat, lon);
         if (!weather) {
             return res.json({
                 mensaje: 'Clima no disponible (configura WEATHER_API_KEY)',

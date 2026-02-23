@@ -28,9 +28,31 @@ const getCurrentWeather = async (lat, lon) => {
             icon: data.weather[0].icon,
             feelsLike: Math.round(data.main.feels_like),
             humidity: data.main.humidity,
+            city: data.name,
         };
     } catch (err) {
         console.error('Error obteniendo clima:', err.message);
+        return null;
+    }
+};
+
+// Obtener el clima actual por nombre de ciudad
+const getWeatherByCity = async (city) => {
+    if (!API_KEY) return null;
+    try {
+        const { data } = await axios.get(`${BASE_URL}/weather`, {
+            params: { q: city, appid: API_KEY, units: 'metric', lang: 'es' },
+        });
+        return {
+            temp: Math.round(data.main.temp),
+            description: data.weather[0].description,
+            icon: data.weather[0].icon,
+            feelsLike: Math.round(data.main.feels_like),
+            humidity: data.main.humidity,
+            city: data.name,
+        };
+    } catch (err) {
+        console.error('Error obteniendo clima por ciudad:', err.message);
         return null;
     }
 };
@@ -76,4 +98,4 @@ const getForecast = async (lat, lon) => {
     }
 };
 
-module.exports = { getCurrentWeather, getForecast };
+module.exports = { getCurrentWeather, getForecast, getWeatherByCity };

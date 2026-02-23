@@ -1,10 +1,11 @@
 // Servidor principal de OutfitVault API
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const dotenv = require('dotenv');
 
-// Cargar variables de entorno
-dotenv.config({ path: '../.env' });
+// Cargar variables de entorno desde la raíz del proyecto
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;

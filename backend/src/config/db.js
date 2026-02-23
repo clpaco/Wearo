@@ -1,8 +1,10 @@
 // Configuración de conexión a PostgreSQL
 const { Pool } = require('pg');
+const path = require('path');
 const dotenv = require('dotenv');
 
-dotenv.config({ path: '../.env' });
+// Cargar .env desde la raíz del proyecto (dos niveles arriba de src/config/)
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 // Pool de conexiones reutilizable
 const pool = new Pool({

@@ -50,6 +50,7 @@ const ProfileScreen = ({ navigation, route }) => {
     // targetId: undefined → mi perfil; si viene por params → perfil ajeno
     const targetId   = route?.params?.userId;
     const isOwnProfile = !targetId || String(targetId) === String(user?.id);
+    const canEdit    = !targetId; // Solo mostrar "Editar" desde la tab Perfil (sin params)
     const profile    = isOwnProfile ? myProfile : viewedProfile;
 
     const [listModal, setListModal] = useState(null); // 'followers' | 'following' | null
@@ -132,7 +133,7 @@ const ProfileScreen = ({ navigation, route }) => {
                 title={isOwnProfile ? 'Mi Perfil' : (profile?.full_name || 'Perfil')}
                 onBack={!isOwnProfile ? () => navigation.goBack() : undefined}
                 rightAction={
-                    isOwnProfile ? (
+                    canEdit ? (
                         <TouchableOpacity
                             onPress={() => navigation.navigate('EditProfile')}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

@@ -49,7 +49,7 @@ const HomeScreen = ({ navigation }) => {
                     {[
                         { icon: '👕', label: 'Armario', color: '#6C5CE7', screen: 'Wardrobe', ready: true },
                         { icon: '👔', label: 'Outfits', color: '#00CEC9', screen: 'Outfits', ready: true },
-                        { icon: '📅', label: 'Calendario', color: '#FDCB6E', screen: null, ready: false },
+                        { icon: '📅', label: 'Calendario', color: '#FDCB6E', screen: 'Calendar', ready: true },
                         { icon: '📊', label: 'Estadísticas', color: '#E17055', screen: null, ready: false },
                     ].map((item) => (
                         <TouchableOpacity

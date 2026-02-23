@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../store/authSlice';
 import { useTheme } from '../hooks/useTheme';
 
-const HomeScreen = () => {
+const HomeScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { user } = useSelector((state) => state.auth);
     const { theme, isDark, toggleTheme } = useTheme();
@@ -40,28 +40,32 @@ const HomeScreen = () => {
                         ¡Bienvenido a OutfitVault!
                     </Text>
                     <Text style={[styles.cardText, { color: c.textSecondary }]}>
-                        Tu armario digital está listo. Próximamente podrás añadir prendas, crear outfits y planificar tu estilo.
+                        Tu armario digital está listo. Añade prendas, crea outfits y planifica tu estilo.
                     </Text>
                 </View>
 
-                {/* Secciones próximas */}
+                {/* Secciones */}
                 <View style={styles.sectionGrid}>
                     {[
-                        { icon: '👕', label: 'Armario', color: '#6C5CE7' },
-                        { icon: '👔', label: 'Outfits', color: '#00CEC9' },
-                        { icon: '📅', label: 'Calendario', color: '#FDCB6E' },
-                        { icon: '📊', label: 'Estadísticas', color: '#E17055' },
+                        { icon: '👕', label: 'Armario', color: '#6C5CE7', screen: 'Wardrobe', ready: true },
+                        { icon: '👔', label: 'Outfits', color: '#00CEC9', screen: null, ready: false },
+                        { icon: '📅', label: 'Calendario', color: '#FDCB6E', screen: null, ready: false },
+                        { icon: '📊', label: 'Estadísticas', color: '#E17055', screen: null, ready: false },
                     ].map((item) => (
-                        <View
+                        <TouchableOpacity
                             key={item.label}
                             style={[styles.sectionCard, { backgroundColor: c.surface, borderColor: c.border }]}
+                            onPress={() => item.ready && navigation.navigate(item.screen)}
+                            activeOpacity={item.ready ? 0.7 : 1}
                         >
                             <View style={[styles.iconCircle, { backgroundColor: item.color + '20' }]}>
                                 <Text style={{ fontSize: 24 }}>{item.icon}</Text>
                             </View>
                             <Text style={[styles.sectionLabel, { color: c.text }]}>{item.label}</Text>
-                            <Text style={[styles.sectionStatus, { color: c.textMuted }]}>Próximamente</Text>
-                        </View>
+                            <Text style={[styles.sectionStatus, { color: item.ready ? c.success : c.textMuted }]}>
+                                {item.ready ? '✓ Disponible' : 'Próximamente'}
+                            </Text>
+                        </TouchableOpacity>
                     ))}
                 </View>
             </View>

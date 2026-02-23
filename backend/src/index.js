@@ -15,6 +15,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Servir archivos estáticos (imágenes de prendas)
+app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
+
 // Ruta de prueba / health check
 app.get('/api/v1/health', (req, res) => {
   res.json({
@@ -26,9 +29,9 @@ app.get('/api/v1/health', (req, res) => {
 
 // Rutas de la API
 app.use('/api/v1/auth', require('./routes/auth.routes'));
+app.use('/api/v1/garments', require('./routes/garments.routes'));
 
 // TODO: Activar cuando se implementen
-// app.use('/api/v1/garments', require('./routes/garments.routes'));
 // app.use('/api/v1/outfits', require('./routes/outfits.routes'));
 // app.use('/api/v1/calendar', require('./routes/calendar.routes'));
 // app.use('/api/v1/stats', require('./routes/stats.routes'));

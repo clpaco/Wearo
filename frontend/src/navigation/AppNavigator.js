@@ -17,6 +17,7 @@ import GarmentDetailScreen from '../screens/GarmentDetailScreen';
 import OutfitsScreen from '../screens/OutfitsScreen';
 import CreateOutfitScreen from '../screens/CreateOutfitScreen';
 import OutfitDetailScreen from '../screens/OutfitDetailScreen';
+import CalendarScreen from '../screens/CalendarScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -55,6 +56,7 @@ const AppStack = () => {
             <Stack.Screen name="Outfits" component={OutfitsScreen} />
             <Stack.Screen name="CreateOutfit" component={CreateOutfitScreen} />
             <Stack.Screen name="OutfitDetail" component={OutfitDetailScreen} />
+            <Stack.Screen name="Calendar" component={CalendarScreen} />
         </Stack.Navigator>
     );
 };

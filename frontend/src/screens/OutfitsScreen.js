@@ -1,0 +1,163 @@
+// Pantalla de listado de Outfits
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+    View, Text, FlatList, TouchableOpacity, Image,
+    StyleSheet, RefreshControl, ActivityIndicator, StatusBar,
+} from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchOutfits, removeOutfit } from '../store/outfitsSlice';
+import { useTheme } from '../hooks/useTheme';
+
+const BASE_URL = 'http://10.0.2.2:3000';
+
+const OutfitsScreen = ({ navigation }) => {
+    const dispatch = useDispatch();
+    const { outfits, isLoading } = useSelector((state) => state.outfits);
+    const { theme } = useTheme();
+    const c = theme.colors;
+    const [refreshing, setRefreshing] = useState(false);
+
+    useEffect(() => {
+        dispatch(fetchOutfits());
+    }, [dispatch]);
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        dispatch(fetchOutfits()).finally(() => setRefreshing(false));
+    }, [dispatch]);
+
+    const renderOutfit = ({ item }) => {
+        const garments = typeof item.garments === 'string' ? JSON.parse(item.garments) : item.garments;
+
+        return (
+            <TouchableOpacity
+                style={[styles.outfitCard, { backgroundColor: c.surface, borderColor: c.border }]}
+                onPress={() => navigation.navigate('OutfitDetail', { outfit: { ...item, garments } })}
+                activeOpacity={0.8}
+            >
+                {/* Mosaico de prendas */}
+                <View style={styles.mosaic}>
+                    {garments.slice(0, 4).map((g, i) => (
+                        g.image_url ? (
+                            <Image
+                                key={g.id}
+                                source={{ uri: `${BASE_URL}${g.image_url}` }}
+                                style={[styles.mosaicImg, garments.length === 1 && styles.mosaicSingle]}
+                            />
+                        ) : (
+                            <View key={g.id || i} style={[styles.mosaicPlaceholder, { backgroundColor: c.surfaceVariant }]}>
+                                <Text style={{ fontSize: 20 }}>👕</Text>
+                            </View>
+                        )
+                    ))}
+                    {garments.length === 0 && (
+                        <View style={[styles.mosaicPlaceholder, styles.mosaicSingle, { backgroundColor: c.surfaceVariant }]}>
+                            <Text style={{ fontSize: 32 }}>👔</Text>
+                        </View>
+                    )}
+                </View>
+
+                <View style={styles.outfitInfo}>
+                    <View style={styles.outfitTitleRow}>
+                        <Text style={[styles.outfitName, { color: c.text }]} numberOfLines={1}>
+                            {item.name}
+                        </Text>
+                        {item.is_favorite && <Text>❤️</Text>}
+                    </View>
+                    <Text style={[styles.outfitMeta, { color: c.textSecondary }]}>
+                        {garments.length} prenda{garments.length !== 1 ? 's' : ''}
+                        {item.occasion ? ` · ${item.occasion}` : ''}
+                    </Text>
+                    {item.times_worn > 0 && (
+                        <Text style={[styles.wornCount, { color: c.textMuted }]}>
+                            Usado {item.times_worn}x
+                        </Text>
+                    )}
+                </View>
+            </TouchableOpacity>
+        );
+    };
+
+    return (
+        <View style={[styles.container, { backgroundColor: c.background }]}>
+            <StatusBar barStyle={c.statusBar} />
+
+            {/* Header */}
+            <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Text style={[styles.backBtn, { color: c.primary }]}>← Volver</Text>
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: c.text }]}>Mis Outfits</Text>
+                <TouchableOpacity
+                    style={[styles.addBtn, { backgroundColor: c.primary }]}
+                    onPress={() => navigation.navigate('CreateOutfit')}
+                >
+                    <Text style={styles.addBtnText}>+ Crear</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Lista */}
+            {isLoading && outfits.length === 0 ? (
+                <View style={styles.centered}>
+                    <ActivityIndicator size="large" color={c.primary} />
+                </View>
+            ) : outfits.length === 0 ? (
+                <View style={styles.centered}>
+                    <Text style={{ fontSize: 64, marginBottom: 16 }}>👔</Text>
+                    <Text style={[styles.emptyTitle, { color: c.text }]}>¡Sin outfits aún!</Text>
+                    <Text style={[styles.emptyText, { color: c.textSecondary }]}>
+                        Combina tus prendas para crear tu primer outfit
+                    </Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={outfits}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={styles.listContent}
+                    renderItem={renderOutfit}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[c.primary]} />
+                    }
+                />
+            )}
+        </View>
+    );
+};
+
+const styles = StyleSheet.create({
+    container: { flex: 1 },
+    header: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
+    },
+    backBtn: { fontSize: 16, fontWeight: '600' },
+    headerTitle: { fontSize: 22, fontWeight: '800' },
+    addBtn: {
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+    },
+    addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    listContent: { padding: 16 },
+    outfitCard: {
+        borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 16,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    },
+    mosaic: {
+        flexDirection: 'row', flexWrap: 'wrap', height: 160,
+    },
+    mosaicImg: { width: '50%', height: 80 },
+    mosaicSingle: { width: '100%', height: 160 },
+    mosaicPlaceholder: {
+        width: '50%', height: 80, justifyContent: 'center', alignItems: 'center',
+    },
+    outfitInfo: { padding: 14 },
+    outfitTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    outfitName: { fontSize: 18, fontWeight: '700', flex: 1, marginRight: 8 },
+    outfitMeta: { fontSize: 14, marginTop: 4 },
+    wornCount: { fontSize: 12, marginTop: 2 },
+    centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+    emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
+    emptyText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+});
+
+export default OutfitsScreen;

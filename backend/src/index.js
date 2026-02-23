@@ -34,7 +34,7 @@ app.use('/api/v1/garments', require('./routes/garments.routes'));
 // TODO: Activar cuando se implementen
 app.use('/api/v1/outfits', require('./routes/outfits.routes'));
 app.use('/api/v1/calendar', require('./routes/calendar.routes'));
-// app.use('/api/v1/stats', require('./routes/stats.routes'));
+app.use('/api/v1/stats', require('./routes/stats.routes'));
 // app.use('/api/v1/social', require('./routes/social.routes'));
 // app.use('/api/v1/weather', require('./routes/weather.routes'));
 

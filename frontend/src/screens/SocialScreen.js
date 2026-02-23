@@ -77,11 +77,15 @@ const SocialScreen = ({ navigation }) => {
 
         return (
             <View style={[styles.postCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-                {/* Cabecera del post */}
-                <View style={styles.postHeader}>
+                {/* Cabecera del post — toca para ir al perfil */}
+                <TouchableOpacity
+                    style={styles.postHeader}
+                    onPress={() => navigation.navigate('UserProfile', { userId: author.id })}
+                    activeOpacity={0.7}
+                >
                     <View style={[styles.avatar, { backgroundColor: c.primary + '20' }]}>
                         {author.avatarUrl ? (
-                            <Image source={{ uri: author.avatarUrl }} style={styles.avatarImg} />
+                            <Image source={{ uri: `${IMAGE_BASE_URL}${author.avatarUrl}` }} style={styles.avatarImg} />
                         ) : (
                             <Text style={[styles.avatarText, { color: c.primary }]}>
                                 {(author.fullName || '?')[0].toUpperCase()}
@@ -96,7 +100,7 @@ const SocialScreen = ({ navigation }) => {
                             {getTimeAgo(post.created_at)}
                         </Text>
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Caption */}
                 {post.caption ? (
@@ -172,9 +176,17 @@ const SocialScreen = ({ navigation }) => {
             <ScreenHeader
                 title="Social"
                 rightAction={
-                    <TouchableOpacity onPress={openShareModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>+ Compartir</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('UserProfile', { userId: user?.id })}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Text style={{ fontSize: 20 }}>👤</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={openShareModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>+ Compartir</Text>
+                        </TouchableOpacity>
+                    </View>
                 }
             />
 

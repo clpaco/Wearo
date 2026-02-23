@@ -36,6 +36,7 @@ app.use('/api/v1/outfits', require('./routes/outfits.routes'));
 app.use('/api/v1/calendar', require('./routes/calendar.routes'));
 app.use('/api/v1/stats', require('./routes/stats.routes'));
 app.use('/api/v1/social', require('./routes/social.routes'));
+app.use('/api/v1/users',  require('./routes/profile.routes'));
 
 // Middleware de manejo de errores global
 app.use((err, req, res, next) => {

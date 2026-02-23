@@ -6,6 +6,7 @@ import outfitsReducer from './outfitsSlice';
 import calendarReducer from './calendarSlice';
 import statsReducer from './statsSlice';
 import socialReducer from './socialSlice';
+import profileReducer from './profileSlice';
 
 const store = configureStore({
     reducer: {
@@ -15,6 +16,7 @@ const store = configureStore({
         calendar: calendarReducer,
         stats: statsReducer,
         social: socialReducer,
+        profile: profileReducer,
     },
 });
 

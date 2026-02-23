@@ -22,6 +22,8 @@ import CreateOutfitScreen from '../screens/CreateOutfitScreen';
 import OutfitDetailScreen from '../screens/OutfitDetailScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import SocialScreen from '../screens/SocialScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -37,6 +39,8 @@ const HomeStack = () => (
     <Stack.Navigator screenOptions={stackOptions}>
         <Stack.Screen name="HomeScreen" component={HomeScreen} />
         <Stack.Screen name="Stats" component={StatsScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
     </Stack.Navigator>
 );
 
@@ -65,6 +69,7 @@ const CalendarStack = () => (
 const SocialStack = () => (
     <Stack.Navigator screenOptions={stackOptions}>
         <Stack.Screen name="SocialScreen" component={SocialScreen} />
+        <Stack.Screen name="UserProfile" component={ProfileScreen} />
     </Stack.Navigator>
 );
 

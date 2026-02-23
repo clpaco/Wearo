@@ -51,10 +51,15 @@ const HomeScreen = ({ navigation }) => {
                         { icon: '👔', label: 'Outfits', color: '#00CEC9', screen: 'Outfits', ready: true },
                         { icon: '📅', label: 'Calendario', color: '#FDCB6E', screen: 'Calendar', ready: true },
                         { icon: '📊', label: 'Estadísticas', color: '#E17055', screen: 'Stats', ready: true },
-                    ].map((item) => (
+                        { icon: '🌐', label: 'Social', color: '#74B9FF', screen: 'Social', ready: true },
+                    ].map((item, idx, arr) => (
                         <TouchableOpacity
                             key={item.label}
-                            style={[styles.sectionCard, { backgroundColor: c.surface, borderColor: c.border }]}
+                            style={[
+                                styles.sectionCard,
+                                { backgroundColor: c.surface, borderColor: c.border },
+                                arr.length % 2 !== 0 && idx === arr.length - 1 && { width: '100%' },
+                            ]}
                             onPress={() => item.ready && navigation.navigate(item.screen)}
                             activeOpacity={item.ready ? 0.7 : 1}
                         >

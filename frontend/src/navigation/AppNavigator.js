@@ -19,6 +19,7 @@ import CreateOutfitScreen from '../screens/CreateOutfitScreen';
 import OutfitDetailScreen from '../screens/OutfitDetailScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import StatsScreen from '../screens/StatsScreen';
+import SocialScreen from '../screens/SocialScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -59,6 +60,7 @@ const AppStack = () => {
             <Stack.Screen name="OutfitDetail" component={OutfitDetailScreen} />
             <Stack.Screen name="Calendar" component={CalendarScreen} />
             <Stack.Screen name="Stats" component={StatsScreen} />
+            <Stack.Screen name="Social" component={SocialScreen} />
         </Stack.Navigator>
     );
 };

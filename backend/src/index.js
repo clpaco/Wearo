@@ -23,8 +23,10 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// TODO: Importar y registrar rutas
-// app.use('/api/v1/auth', require('./routes/auth.routes'));
+// Rutas de la API
+app.use('/api/v1/auth', require('./routes/auth.routes'));
+
+// TODO: Activar cuando se implementen
 // app.use('/api/v1/garments', require('./routes/garments.routes'));
 // app.use('/api/v1/outfits', require('./routes/outfits.routes'));
 // app.use('/api/v1/calendar', require('./routes/calendar.routes'));

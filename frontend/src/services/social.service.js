@@ -36,3 +36,23 @@ export const unlikePost = async (sharedId) => {
     const { data } = await api.delete(`/social/${sharedId}/like`);
     return data;
 };
+
+// ── Comentarios ───────────────────────────────────────
+
+// Obtener comentarios de un post
+export const getComments = async (postId) => {
+    const { data } = await api.get(`/social/${postId}/comments`);
+    return data;
+};
+
+// Añadir comentario
+export const postComment = async (postId, text) => {
+    const { data } = await api.post(`/social/${postId}/comments`, { text });
+    return data;
+};
+
+// Eliminar comentario propio
+export const deleteComment = async (postId, commentId) => {
+    const { data } = await api.delete(`/social/${postId}/comments/${commentId}`);
+    return data;
+};

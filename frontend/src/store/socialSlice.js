@@ -56,6 +56,45 @@ export const toggleLike = createAsyncThunk(
     }
 );
 
+// Thunk: Obtener comentarios de un post
+export const fetchComments = createAsyncThunk(
+    'social/fetchComments',
+    async (postId, { rejectWithValue }) => {
+        try {
+            const data = await socialSvc.getComments(postId);
+            return { postId, comments: data.comments };
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al cargar comentarios');
+        }
+    }
+);
+
+// Thunk: Añadir comentario
+export const addComment = createAsyncThunk(
+    'social/addComment',
+    async ({ postId, text }, { rejectWithValue }) => {
+        try {
+            const data = await socialSvc.postComment(postId, text);
+            return { postId, comment: data.comment };
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al comentar');
+        }
+    }
+);
+
+// Thunk: Eliminar comentario
+export const removeComment = createAsyncThunk(
+    'social/removeComment',
+    async ({ postId, commentId }, { rejectWithValue }) => {
+        try {
+            await socialSvc.deleteComment(postId, commentId);
+            return { postId, commentId };
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al eliminar comentario');
+        }
+    }
+);
+
 const socialSlice = createSlice({
     name: 'social',
     initialState: {
@@ -64,6 +103,8 @@ const socialSlice = createSlice({
         isLoading: false,
         isRefreshing: false,
         error: null,
+        comments: {}, // postId → array de comentarios
+        commentsLoading: false,
     },
     reducers: {
         clearSocialError: (state) => { state.error = null; },
@@ -107,6 +148,33 @@ const socialSlice = createSlice({
                     post.like_count = action.payload.likeCount;
                     post.liked_by_me = action.payload.likedByMe;
                 }
+            })
+            // Comentarios
+            .addCase(fetchComments.pending, (state) => {
+                state.commentsLoading = true;
+            })
+            .addCase(fetchComments.fulfilled, (state, action) => {
+                state.commentsLoading = false;
+                state.comments[action.payload.postId] = action.payload.comments;
+            })
+            .addCase(fetchComments.rejected, (state) => {
+                state.commentsLoading = false;
+            })
+            .addCase(addComment.fulfilled, (state, action) => {
+                const { postId, comment } = action.payload;
+                if (!state.comments[postId]) state.comments[postId] = [];
+                state.comments[postId] = [...state.comments[postId], comment];
+                // Incrementar contador en el feed
+                const post = state.feed.find((p) => p.id === postId);
+                if (post) post.comment_count = (post.comment_count || 0) + 1;
+            })
+            .addCase(removeComment.fulfilled, (state, action) => {
+                const { postId, commentId } = action.payload;
+                if (state.comments[postId]) {
+                    state.comments[postId] = state.comments[postId].filter((c) => c.id !== commentId);
+                }
+                const post = state.feed.find((p) => p.id === postId);
+                if (post && post.comment_count > 0) post.comment_count -= 1;
             });
     },
 });

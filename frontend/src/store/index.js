@@ -7,6 +7,7 @@ import calendarReducer from './calendarSlice';
 import statsReducer from './statsSlice';
 import socialReducer from './socialSlice';
 import profileReducer from './profileSlice';
+import aiReducer from './aiSlice';
 
 const store = configureStore({
     reducer: {
@@ -17,6 +18,7 @@ const store = configureStore({
         stats: statsReducer,
         social: socialReducer,
         profile: profileReducer,
+        ai: aiReducer,
     },
 });
 

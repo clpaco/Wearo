@@ -1,11 +1,12 @@
 // Pantalla Social — feed público de outfits con likes y compartir
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, Modal, TextInput, Image,
     StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchFeed, toggleLike, shareOutfit, resetFeed } from '../store/socialSlice';
+import { fetchFeed, toggleLike, shareOutfit, resetFeed, fetchComments, addComment, removeComment } from '../store/socialSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
@@ -14,7 +15,7 @@ import EmptyState from '../components/EmptyState';
 
 const SocialScreen = ({ navigation }) => {
     const dispatch = useDispatch();
-    const { feed, hasMore, isLoading, isRefreshing } = useSelector((state) => state.social);
+    const { feed, hasMore, isLoading, isRefreshing, comments, commentsLoading } = useSelector((state) => state.social);
     const { outfits } = useSelector((state) => state.outfits);
     const { user } = useSelector((state) => state.auth);
     const { theme } = useTheme();
@@ -23,6 +24,42 @@ const SocialScreen = ({ navigation }) => {
     const [showShareModal, setShowShareModal] = useState(false);
     const [caption, setCaption] = useState('');
     const [selectedOutfitId, setSelectedOutfitId] = useState(null);
+
+    // Comments state
+    const [commentsPostId, setCommentsPostId] = useState(null);
+    const [showComments, setShowComments] = useState(false);
+    const [commentInput, setCommentInput] = useState('');
+    const commentInputRef = useRef(null);
+
+    const openComments = (postId) => {
+        setCommentsPostId(postId);
+        setCommentInput('');
+        setShowComments(true);
+        dispatch(fetchComments(postId));
+    };
+
+    const handleSendComment = () => {
+        const text = commentInput.trim();
+        if (!text || !commentsPostId) return;
+        setCommentInput('');
+        dispatch(addComment({ postId: commentsPostId, text }));
+    };
+
+    const handleDeleteComment = (commentId) => {
+        dispatch(removeComment({ postId: commentsPostId, commentId }));
+    };
+
+    const getTimeAgo = (dateStr) => {
+        const diff = Date.now() - new Date(dateStr).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return 'Ahora';
+        if (mins < 60) return `${mins}m`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return `${days}d`;
+        return `${Math.floor(days / 7)}sem`;
+    };
 
     useEffect(() => {
         dispatch(fetchFeed({ limit: 20, offset: 0 }));
@@ -55,18 +92,6 @@ const SocialScreen = ({ navigation }) => {
         setShowShareModal(false);
         setCaption('');
         setSelectedOutfitId(null);
-    };
-
-    const getTimeAgo = (dateStr) => {
-        const diff = Date.now() - new Date(dateStr).getTime();
-        const mins = Math.floor(diff / 60000);
-        if (mins < 1) return 'Ahora';
-        if (mins < 60) return `${mins}m`;
-        const hrs = Math.floor(mins / 60);
-        if (hrs < 24) return `${hrs}h`;
-        const days = Math.floor(hrs / 24);
-        if (days < 7) return `${days}d`;
-        return `${Math.floor(days / 7)}sem`;
     };
 
     const renderPost = ({ item: post }) => {
@@ -152,6 +177,12 @@ const SocialScreen = ({ navigation }) => {
                             {post.like_count || 0}
                         </Text>
                     </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => openComments(post.id)} activeOpacity={0.6}>
+                        <Text style={{ fontSize: 18 }}>💬</Text>
+                        <Text style={[styles.actionCount, { color: c.textMuted }]}>
+                            {post.comment_count || 0}
+                        </Text>
+                    </TouchableOpacity>
                     <View style={styles.actionBtn}>
                         <Text style={{ fontSize: 16 }}>👁️</Text>
                         <Text style={[styles.actionLabel, { color: c.textMuted }]}>
@@ -218,6 +249,102 @@ const SocialScreen = ({ navigation }) => {
                     ) : null
                 }
             />
+
+            {/* Modal: Comentarios */}
+            <Modal visible={showComments} animationType="slide" transparent onRequestClose={() => setShowComments(false)}>
+                <KeyboardAvoidingView
+                    style={styles.modalOverlay}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <View style={[styles.modalContent, { backgroundColor: c.surface, maxHeight: '75%' }]}>
+                        {/* Header */}
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: c.text }]}>Comentarios</Text>
+                            <TouchableOpacity onPress={() => setShowComments(false)}>
+                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Lista de comentarios */}
+                        {commentsLoading ? (
+                            <ActivityIndicator style={{ paddingVertical: 32 }} color={c.primary} />
+                        ) : (
+                            <FlatList
+                                data={commentsPostId ? (comments[commentsPostId] || []) : []}
+                                keyExtractor={(item) => item.id.toString()}
+                                style={{ flex: 1 }}
+                                contentContainerStyle={{ paddingVertical: 8 }}
+                                ListEmptyComponent={
+                                    <Text style={[styles.emptyPicker, { color: c.textMuted }]}>
+                                        Sin comentarios aún. ¡Sé el primero!
+                                    </Text>
+                                }
+                                renderItem={({ item: comment }) => {
+                                    const isOwn = comment.author?.id === user?.id;
+                                    return (
+                                        <View style={[styles.commentRow, { borderBottomColor: c.border }]}>
+                                            <View style={[styles.commentAvatar, { backgroundColor: c.primary + '20' }]}>
+                                                {comment.author?.avatarUrl ? (
+                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${comment.author.avatarUrl}` }} style={styles.commentAvatarImg} />
+                                                ) : (
+                                                    <Text style={[styles.commentAvatarText, { color: c.primary }]}>
+                                                        {(comment.author?.fullName || '?')[0].toUpperCase()}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <View style={styles.commentMeta}>
+                                                    <Text style={[styles.commentAuthor, { color: c.text }]}>
+                                                        {comment.author?.fullName || 'Usuario'}
+                                                    </Text>
+                                                    <Text style={[styles.commentTime, { color: c.textMuted }]}>
+                                                        {getTimeAgo(comment.created_at)}
+                                                    </Text>
+                                                </View>
+                                                <Text style={[styles.commentText, { color: c.textSecondary }]}>
+                                                    {comment.text}
+                                                </Text>
+                                            </View>
+                                            {isOwn && (
+                                                <TouchableOpacity
+                                                    onPress={() => handleDeleteComment(comment.id)}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                    style={{ marginLeft: 8 }}
+                                                >
+                                                    <Text style={{ fontSize: 14 }}>🗑️</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    );
+                                }}
+                            />
+                        )}
+
+                        {/* Input enviar */}
+                        <View style={[styles.commentInputBar, { borderTopColor: c.border }]}>
+                            <TextInput
+                                ref={commentInputRef}
+                                style={[styles.commentInput, { color: c.text, backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                                placeholder="Escribe un comentario…"
+                                placeholderTextColor={c.textMuted}
+                                value={commentInput}
+                                onChangeText={setCommentInput}
+                                maxLength={500}
+                                returnKeyType="send"
+                                onSubmitEditing={handleSendComment}
+                            />
+                            <TouchableOpacity
+                                style={[styles.commentSendBtn, { backgroundColor: commentInput.trim() ? c.primary : c.border }]}
+                                onPress={handleSendComment}
+                                disabled={!commentInput.trim()}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#FFF', fontSize: 15 }}>↑</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* Modal: Compartir outfit */}
             <Modal visible={showShareModal} animationType="slide" transparent>
@@ -372,6 +499,19 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
     },
     shareBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+
+    // Comentarios
+    commentRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 0.5 },
+    commentAvatar: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginRight: 10, overflow: 'hidden' },
+    commentAvatarImg: { width: 34, height: 34, borderRadius: 17 },
+    commentAvatarText: { fontSize: 14, fontWeight: '700' },
+    commentMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+    commentAuthor: { fontSize: 13, fontWeight: '700' },
+    commentTime: { fontSize: 11 },
+    commentText: { fontSize: 14, lineHeight: 19 },
+    commentInputBar: { flexDirection: 'row', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, gap: 8, paddingBottom: 4 },
+    commentInput: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, fontSize: 14 },
+    commentSendBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 });
 
 export default SocialScreen;

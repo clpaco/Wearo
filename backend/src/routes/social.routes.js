@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
-const { share, unshare, getFeed, getMine, like, unlike } = require('../controllers/social.controller');
+const { share, unshare, getFeed, getMine, like, unlike, getComments, addComment, deleteComment } = require('../controllers/social.controller');
 
 router.use(verifyToken);
 
@@ -23,5 +23,14 @@ router.post('/:id/like', like);
 
 // DELETE /api/v1/social/:id/like — Quitar like
 router.delete('/:id/like', unlike);
+
+// GET /api/v1/social/:id/comments — Obtener comentarios
+router.get('/:id/comments', getComments);
+
+// POST /api/v1/social/:id/comments — Añadir comentario
+router.post('/:id/comments', addComment);
+
+// DELETE /api/v1/social/:id/comments/:commentId — Eliminar comentario
+router.delete('/:id/comments/:commentId', deleteComment);
 
 module.exports = router;

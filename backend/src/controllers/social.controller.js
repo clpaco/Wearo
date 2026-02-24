@@ -84,4 +84,51 @@ const unlike = async (req, res) => {
     }
 };
 
-module.exports = { share, unshare, getFeed, getMine, like, unlike };
+module.exports = { share, unshare, getFeed, getMine, like, unlike, getComments, addComment, deleteComment };
+
+// GET /api/v1/social/:id/comments — Obtener comentarios de un post
+async function getComments(req, res) {
+    try {
+        const { limit = 50, offset = 0 } = req.query;
+        const comments = await socialModel.getComments(req.params.id, {
+            limit: parseInt(limit, 10),
+            offset: parseInt(offset, 10),
+        });
+        res.json({ comments });
+    } catch (err) {
+        console.error('Error obteniendo comentarios:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al obtener comentarios' });
+    }
+}
+
+// POST /api/v1/social/:id/comments — Añadir comentario
+async function addComment(req, res) {
+    try {
+        const { text } = req.body;
+        if (!text || !text.trim()) {
+            return res.status(400).json({ error: true, mensaje: 'El texto del comentario es obligatorio' });
+        }
+        if (text.trim().length > 500) {
+            return res.status(400).json({ error: true, mensaje: 'El comentario no puede superar 500 caracteres' });
+        }
+        const comment = await socialModel.addComment(req.user.id, req.params.id, text.trim());
+        res.status(201).json({ mensaje: 'Comentario añadido', comment });
+    } catch (err) {
+        console.error('Error añadiendo comentario:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al añadir comentario' });
+    }
+}
+
+// DELETE /api/v1/social/:id/comments/:commentId — Eliminar comentario
+async function deleteComment(req, res) {
+    try {
+        const removed = await socialModel.deleteComment(req.user.id, req.params.commentId);
+        if (!removed) {
+            return res.status(404).json({ error: true, mensaje: 'Comentario no encontrado o no te pertenece' });
+        }
+        res.json({ mensaje: 'Comentario eliminado' });
+    } catch (err) {
+        console.error('Error eliminando comentario:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al eliminar comentario' });
+    }
+}

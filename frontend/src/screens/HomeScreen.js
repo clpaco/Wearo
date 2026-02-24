@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity, Image,
     StyleSheet, StatusBar, RefreshControl, FlatList,
-    Modal, TextInput, KeyboardAvoidingView, Platform,
+    Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { logoutUser } from '../store/authSlice';
 import { fetchAllStats } from '../store/statsSlice';
 import { fetchGarments } from '../store/wardrobeSlice';
 import { fetchMonthEntries } from '../store/calendarSlice';
+import { fetchWeatherRecommendation, clearWeatherRec } from '../store/aiSlice';
 import { useTheme } from '../hooks/useTheme';
 import { getWeatherByCity } from '../services/calendar.service';
 import { IMAGE_BASE_URL } from '../services/api';
@@ -53,6 +54,7 @@ const HomeScreen = ({ navigation }) => {
     const { resumen } = useSelector((s) => s.stats);
     const { garments } = useSelector((s) => s.wardrobe);
     const { entries } = useSelector((s) => s.calendar);
+    const { weatherRec, isLoading: aiLoading } = useSelector((s) => s.ai);
 
     const [weather, setWeather] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
@@ -162,6 +164,42 @@ const HomeScreen = ({ navigation }) => {
                         </Text>
                     </View>
                 </Card>
+
+                {/* Sugerencia IA por clima */}
+                {city && (
+                    <View style={{ marginBottom: 20 }}>
+                        {weatherRec ? (
+                            <Card style={{ borderLeftWidth: 3, borderLeftColor: c.primary }} padding={14}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <Text style={[{ fontSize: 12, fontWeight: '600', color: c.primary, marginBottom: 4 }]}>💡 SUGERENCIA IA</Text>
+                                    <TouchableOpacity onPress={() => dispatch(clearWeatherRec())} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                        <Ionicons name="close" size={16} color={c.textMuted} />
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={[{ fontSize: 15, fontWeight: '700', color: c.text, marginBottom: 4 }]}>
+                                    {weatherRec.outfitName || 'Sin outfit guardado'}
+                                </Text>
+                                <Text style={[{ fontSize: 13, color: c.textSecondary, lineHeight: 18 }]}>{weatherRec.reason}</Text>
+                            </Card>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.aiBtn, { backgroundColor: c.primaryLight + '20', borderColor: c.primary + '40', borderWidth: 1 }]}
+                                onPress={() => dispatch(fetchWeatherRecommendation(city))}
+                                disabled={aiLoading}
+                                activeOpacity={0.8}
+                            >
+                                {aiLoading ? (
+                                    <ActivityIndicator size="small" color={c.primary} />
+                                ) : (
+                                    <Text style={{ fontSize: 16 }}>💡</Text>
+                                )}
+                                <Text style={[styles.aiBtnText, { color: c.primary }]}>
+                                    {aiLoading ? 'Pensando…' : 'Sugerencia IA para hoy'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
 
                 {/* Quick Stats */}
                 <Text style={[styles.sectionTitle, { color: c.text }]}>Resumen</Text>
@@ -352,6 +390,9 @@ const styles = StyleSheet.create({
 
     logoutBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
     logoutText: { fontSize: 15, fontWeight: '600' },
+
+    aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, gap: 8 },
+    aiBtnText: { fontSize: 15, fontWeight: '600' },
 
     // Modal ciudad
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },

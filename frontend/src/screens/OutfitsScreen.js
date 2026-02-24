@@ -5,11 +5,15 @@ import {
     StyleSheet, RefreshControl, ActivityIndicator, StatusBar,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchOutfits, removeOutfit } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+import AIChatModal from '../components/AIChatModal';
+
+const CITY_KEY = 'userCity';
 
 const OutfitsScreen = ({ navigation }) => {
     const dispatch = useDispatch();
@@ -17,10 +21,19 @@ const OutfitsScreen = ({ navigation }) => {
     const { theme } = useTheme();
     const c = theme.colors;
     const [refreshing, setRefreshing] = useState(false);
+    const [aiModalVisible, setAiModalVisible] = useState(false);
+    const [aiModalMode, setAiModalMode] = useState('outfits');
+    const [city, setCity] = useState(null);
 
     useEffect(() => {
         dispatch(fetchOutfits());
+        AsyncStorage.getItem(CITY_KEY).then((v) => { if (v) setCity(v); });
     }, [dispatch]);
+
+    const openAI = (mode) => {
+        setAiModalMode(mode);
+        setAiModalVisible(true);
+    };
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -97,6 +110,26 @@ const OutfitsScreen = ({ navigation }) => {
                 }
             />
 
+            {/* Acciones IA */}
+            <View style={styles.aiRow}>
+                <TouchableOpacity
+                    style={[styles.aiPill, { backgroundColor: c.primaryLight + '20', borderColor: c.primary + '40' }]}
+                    onPress={() => openAI('outfits')}
+                    activeOpacity={0.8}
+                >
+                    <Text style={{ fontSize: 15 }}>🤖</Text>
+                    <Text style={[styles.aiPillText, { color: c.primary }]}>Chat IA</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.aiPill, { backgroundColor: c.accent + '15', borderColor: c.accent + '40' }]}
+                    onPress={() => openAI('shopping')}
+                    activeOpacity={0.8}
+                >
+                    <Text style={{ fontSize: 15 }}>🛍️</Text>
+                    <Text style={[styles.aiPillText, { color: c.accent }]}>Qué me falta</Text>
+                </TouchableOpacity>
+            </View>
+
             {/* Lista */}
             {isLoading && outfits.length === 0 ? (
                 <View style={styles.centered}>
@@ -120,6 +153,13 @@ const OutfitsScreen = ({ navigation }) => {
                     }
                 />
             )}
+
+            <AIChatModal
+                visible={aiModalVisible}
+                mode={aiModalMode}
+                city={city}
+                onClose={() => setAiModalVisible(false)}
+            />
         </View>
     );
 };
@@ -148,6 +188,9 @@ const styles = StyleSheet.create({
     outfitMeta: { fontSize: 14, marginTop: 4 },
     wornCount: { fontSize: 12, marginTop: 2 },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+    aiRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+    aiPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 22, borderWidth: 1, gap: 6 },
+    aiPillText: { fontSize: 14, fontWeight: '600' },
 });
 
 export default OutfitsScreen;

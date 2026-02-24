@@ -48,7 +48,7 @@ const getModel = () => {
 const hfGenerate = async (prompt, maxTokens = 512) => {
     const makeRequest = async () => {
         const response = await axios.post(
-            `https://api-inference.huggingface.co/models/${HF_MODEL}`,
+            `https://router.huggingface.co/hf/${HF_MODEL}`,
             {
                 inputs: `<s>[INST] ${prompt} [/INST]`,
                 parameters: { max_new_tokens: maxTokens, temperature: 0.7, return_full_text: false },
@@ -177,7 +177,7 @@ Responde siempre en espanol, de forma amigable y util. Si el usuario pregunta qu
 
             const chat = model.startChat({
                 history: cleanHistory,
-                systemInstruction: systemContext,
+                systemInstruction: { parts: [{ text: systemContext }] },
             });
 
             const result = await chat.sendMessage(lastMsg.content);

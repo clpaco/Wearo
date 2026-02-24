@@ -43,31 +43,32 @@ const getModel = () => {
     return genAI.getGenerativeModel({ model: MODEL_NAME });
 };
 
-// ── HuggingFace Inference API helper ─────────────────────────────────────────
+// ── HuggingFace Inference API (OpenAI-compatible) ────────────────────────────
 
 const hfGenerate = async (prompt, maxTokens = 512) => {
     const makeRequest = async () => {
         const response = await axios.post(
-            `https://router.huggingface.co/hf/${HF_MODEL}`,
+            'https://router.huggingface.co/v1/chat/completions',
             {
-                inputs: `<s>[INST] ${prompt} [/INST]`,
-                parameters: { max_new_tokens: maxTokens, temperature: 0.7, return_full_text: false },
+                model: HF_MODEL,
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: maxTokens,
+                temperature: 0.7,
             },
             {
                 headers: { Authorization: `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
                 timeout: 60000,
             }
         );
-        const generated = response.data?.[0]?.generated_text || '';
-        return generated.trim();
+        return (response.data?.choices?.[0]?.message?.content || '').trim();
     };
 
     try {
         return await makeRequest();
     } catch (err) {
         // Retry once on 503 (model loading)
-        if (err.response?.status === 503 && err.response?.data?.estimated_time) {
-            const wait = Math.min(err.response.data.estimated_time * 1000, 30000);
+        if (err.response?.status === 503) {
+            const wait = Math.min((err.response?.data?.estimated_time || 10) * 1000, 30000);
             console.log(`[AI] HuggingFace modelo cargando, reintentando en ${Math.round(wait / 1000)}s...`);
             await new Promise((r) => setTimeout(r, wait));
             return await makeRequest();

@@ -1,16 +1,16 @@
-// Servicio de autenticación con almacenamiento seguro
+// Servicio de autenticación con almacenamiento local
 import api from './api';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Iniciar sesión
 export const login = async (email, password) => {
     try {
         const { data } = await api.post('/auth/login', { email, password });
 
-        // Guardar tokens y usuario en SecureStore
-        await SecureStore.setItemAsync('accessToken', data.accessToken);
-        await SecureStore.setItemAsync('refreshToken', data.refreshToken);
-        await SecureStore.setItemAsync('user', JSON.stringify(data.usuario));
+        // Guardar tokens y usuario
+        await AsyncStorage.setItem('accessToken', data.accessToken);
+        await AsyncStorage.setItem('refreshToken', data.refreshToken);
+        await AsyncStorage.setItem('user', JSON.stringify(data.usuario));
 
         return data;
     } catch (error) {
@@ -24,9 +24,9 @@ export const register = async (email, password, fullName) => {
         const { data } = await api.post('/auth/register', { email, password, fullName });
 
         // Guardar tokens y usuario
-        await SecureStore.setItemAsync('accessToken', data.accessToken);
-        await SecureStore.setItemAsync('refreshToken', data.refreshToken);
-        await SecureStore.setItemAsync('user', JSON.stringify(data.usuario));
+        await AsyncStorage.setItem('accessToken', data.accessToken);
+        await AsyncStorage.setItem('refreshToken', data.refreshToken);
+        await AsyncStorage.setItem('user', JSON.stringify(data.usuario));
 
         return data;
     } catch (error) {
@@ -37,23 +37,23 @@ export const register = async (email, password, fullName) => {
 // Cerrar sesión
 export const logout = async () => {
     try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
         await api.post('/auth/logout', { refreshToken });
     } catch (e) {
         // Ignorar errores de red al cerrar sesión
     } finally {
         // Siempre limpiar datos locales
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('user');
+        await AsyncStorage.removeItem('accessToken');
+        await AsyncStorage.removeItem('refreshToken');
+        await AsyncStorage.removeItem('user');
     }
 };
 
 // Restaurar sesión guardada
 export const getStoredSession = async () => {
-    const accessToken = await SecureStore.getItemAsync('accessToken');
-    const refreshToken = await SecureStore.getItemAsync('refreshToken');
-    const userJson = await SecureStore.getItemAsync('user');
+    const accessToken = await AsyncStorage.getItem('accessToken');
+    const refreshToken = await AsyncStorage.getItem('refreshToken');
+    const userJson = await AsyncStorage.getItem('user');
 
     if (!accessToken || !userJson) return null;
 

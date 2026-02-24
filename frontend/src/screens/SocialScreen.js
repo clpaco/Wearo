@@ -78,6 +78,15 @@ const SocialScreen = ({ navigation }) => {
         dispatch(fetchFeed({ limit: 20, offset: 0 }));
     }, [dispatch]);
 
+    // Auto-fetch comments for all posts in the feed
+    useEffect(() => {
+        feed.forEach((post) => {
+            if ((post.comment_count || 0) > 0 && !comments[post.id]) {
+                dispatch(fetchComments(post.id));
+            }
+        });
+    }, [feed, dispatch]);
+
     const onRefresh = useCallback(() => {
         dispatch(fetchFeed({ limit: 20, offset: 0 }));
     }, [dispatch]);
@@ -245,14 +254,28 @@ const SocialScreen = ({ navigation }) => {
                     </View>
                 ) : null}
 
-                {/* "View comments" link */}
-                {(post.comment_count || 0) > 0 && (
-                    <TouchableOpacity onPress={() => openComments(post.id)} style={styles.viewCommentsBtn}>
-                        <Text style={[styles.viewCommentsText, { color: c.textMuted }]}>
-                            Ver {post.comment_count} comentario{post.comment_count !== 1 ? 's' : ''}
-                        </Text>
-                    </TouchableOpacity>
+                {/* Inline comments */}
+                {(comments[post.id] || []).length > 0 && (
+                    <View style={styles.inlineComments}>
+                        {(comments[post.id] || []).map((comment) => (
+                            <View key={comment.id} style={styles.inlineCommentRow}>
+                                <Text style={[styles.inlineCommentAuthor, { color: c.text }]}>
+                                    {comment.author?.fullName || 'Usuario'}
+                                </Text>
+                                <Text style={[styles.inlineCommentText, { color: c.text }]}>
+                                    {' '}{comment.text}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
                 )}
+
+                {/* Add comment link */}
+                <TouchableOpacity onPress={() => openComments(post.id)} style={styles.viewCommentsBtn}>
+                    <Text style={[styles.viewCommentsText, { color: c.textMuted }]}>
+                        Añadir un comentario...
+                    </Text>
+                </TouchableOpacity>
 
                 {/* Garment count */}
                 <Text style={[styles.garmentCountText, { color: c.textMuted }]}>
@@ -594,6 +617,12 @@ const styles = StyleSheet.create({
     // View comments link
     viewCommentsBtn: { paddingHorizontal: 14, paddingTop: 4 },
     viewCommentsText: { fontSize: 14 },
+
+    // Inline comments in feed
+    inlineComments: { paddingHorizontal: 14, paddingTop: 4 },
+    inlineCommentRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 2 },
+    inlineCommentAuthor: { fontSize: 13, fontWeight: '700' },
+    inlineCommentText: { fontSize: 13, lineHeight: 18, flexShrink: 1 },
 
     // Garment count text
     garmentCountText: { fontSize: 13, paddingHorizontal: 14, paddingTop: 2, paddingBottom: 12 },

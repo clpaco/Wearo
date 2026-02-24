@@ -10,7 +10,8 @@ import {
     fetchMyProfile, fetchUserProfile, fetchUserPosts,
     toggleFollow, fetchFollowers, fetchFollowing, clearViewedProfile,
 } from '../store/profileSlice';
-import { fetchComments, addComment, removeComment } from '../store/socialSlice';
+import { fetchComments, addComment, removeComment, toggleLike } from '../store/socialSlice';
+import { logoutUser } from '../store/authSlice';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
@@ -133,6 +134,16 @@ const ProfileScreen = ({ navigation, route }) => {
         dispatch(removeComment({ postId: selectedPost.id, commentId }));
     };
 
+    const handlePostLike = () => {
+        if (!selectedPost) return;
+        dispatch(toggleLike({ sharedId: selectedPost.id, isLiked: selectedPost.liked_by_me }));
+        setSelectedPost((prev) => prev ? {
+            ...prev,
+            liked_by_me: !prev.liked_by_me,
+            like_count: prev.liked_by_me ? (prev.like_count || 1) - 1 : (prev.like_count || 0) + 1,
+        } : null);
+    };
+
     if (isLoading && !profile) {
         return (
             <View style={[styles.container, styles.center, { backgroundColor: c.background }]}>
@@ -179,12 +190,20 @@ const ProfileScreen = ({ navigation, route }) => {
                 onBack={!isOwnProfile ? () => navigation.goBack() : undefined}
                 rightAction={
                     canEdit ? (
-                        <TouchableOpacity
-                            onPress={() => navigation.navigate('EditProfile')}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>Editar</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('EditProfile')}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>Editar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => dispatch(logoutUser())}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Ionicons name="log-out-outline" size={22} color={c.error} />
+                            </TouchableOpacity>
+                        </View>
                     ) : null
                 }
             />
@@ -320,18 +339,45 @@ const ProfileScreen = ({ navigation, route }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Stats */}
+                        {/* Garments grid */}
+                        {(selectedPost?.garments || []).length > 0 && (
+                            <View style={styles.detailGarmentGrid}>
+                                {selectedPost.garments.map((g) => (
+                                    <View key={g.id} style={[styles.detailGarmentThumb, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+                                        {g.image_url ? (
+                                            <Image source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }} style={styles.detailGarmentImg} resizeMode="cover" />
+                                        ) : (
+                                            <View style={styles.detailGarmentPlaceholder}>
+                                                <Ionicons name="shirt-outline" size={24} color={c.textMuted} />
+                                            </View>
+                                        )}
+                                        <Text style={[styles.detailGarmentName, { color: c.text }]} numberOfLines={1}>{g.name}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        {/* Actions bar: like + comment count + occasion */}
                         <View style={[styles.postStats, { borderBottomColor: c.border }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} onPress={handlePostLike}>
+                                    <Ionicons
+                                        name={selectedPost?.liked_by_me ? 'heart' : 'heart-outline'}
+                                        size={22}
+                                        color={selectedPost?.liked_by_me ? c.error : c.text}
+                                    />
+                                    <Text style={[styles.postStatText, { color: c.text, fontWeight: '700' }]}>{selectedPost?.like_count || 0}</Text>
+                                </TouchableOpacity>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Ionicons name="heart" size={14} color={c.textMuted} />
-                                    <Text style={[styles.postStatText, { color: c.textMuted }]}>{selectedPost?.like_count || 0}</Text>
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Ionicons name="chatbubble-outline" size={14} color={c.textMuted} />
+                                    <Ionicons name="chatbubble-outline" size={18} color={c.textMuted} />
                                     <Text style={[styles.postStatText, { color: c.textMuted }]}>{postComments.length}</Text>
                                 </View>
                             </View>
+                            {selectedPost?.outfit?.occasion && (
+                                <View style={[styles.detailOccasionBadge, { backgroundColor: c.primary + '15' }]}>
+                                    <Text style={[styles.detailOccasionText, { color: c.primary }]}>{selectedPost.outfit.occasion}</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Comentarios */}
@@ -484,11 +530,20 @@ const styles = StyleSheet.create({
     // Post detail modal
     postDetailBox: {
         borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        maxHeight: '80%', paddingTop: 4,
+        maxHeight: '85%', paddingTop: 4,
     },
     postCaption: { fontSize: 13, marginTop: 2 },
-    postStats: { paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 0.5 },
+    postStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 0.5 },
     postStatText: { fontSize: 14 },
+
+    // Detail garments grid
+    detailGarmentGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
+    detailGarmentThumb: { width: 90, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+    detailGarmentImg: { width: 90, height: 90 },
+    detailGarmentPlaceholder: { width: 90, height: 90, justifyContent: 'center', alignItems: 'center' },
+    detailGarmentName: { fontSize: 11, fontWeight: '500', paddingHorizontal: 6, paddingVertical: 4, textAlign: 'center' },
+    detailOccasionBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+    detailOccasionText: { fontSize: 12, fontWeight: '600' },
     commentsLabel: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, fontSize: 13, fontWeight: '600', textTransform: 'uppercase' },
     commentsList: { flex: 1 },
     noComments: { textAlign: 'center', padding: 24, fontSize: 14 },

@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch, useSelector } from 'react-redux';
-import { logoutUser } from '../store/authSlice';
+
 import { fetchAllStats } from '../store/statsSlice';
 import { fetchGarments } from '../store/wardrobeSlice';
 import { fetchMonthEntries } from '../store/calendarSlice';
@@ -362,15 +362,6 @@ const HomeScreen = ({ navigation }) => {
                     </Card>
                 </View>
 
-                {/* Logout */}
-                <TouchableOpacity
-                    style={[styles.logoutBtn, { borderColor: c.error + '60' }]}
-                    onPress={() => dispatch(logoutUser())}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="log-out-outline" size={18} color={c.error} style={{ marginRight: 8 }} />
-                    <Text style={[styles.logoutText, { color: c.error }]}>Cerrar sesión</Text>
-                </TouchableOpacity>
             </ScrollView>
 
             {/* Modal ciudad con autocompletar */}
@@ -491,9 +482,6 @@ const styles = StyleSheet.create({
 
     quickRow: { flexDirection: 'row', marginBottom: 24 },
     quickLabel: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 6 },
-
-    logoutBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
-    logoutText: { fontSize: 15, fontWeight: '600' },
 
     aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, gap: 8 },
     aiBtnText: { fontSize: 15, fontWeight: '600' },

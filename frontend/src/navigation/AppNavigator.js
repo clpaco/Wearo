@@ -75,6 +75,7 @@ const ProfileStack = () => (
     <Stack.Navigator screenOptions={stackOptions}>
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="UserProfile" component={ProfileScreen} />
     </Stack.Navigator>
 );
 

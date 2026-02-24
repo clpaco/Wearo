@@ -18,6 +18,15 @@ app.use(express.urlencoded({ extended: true }));
 // Servir archivos estáticos (imágenes de prendas)
 app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
 
+// Ruta raíz
+app.get('/', (req, res) => {
+  res.json({
+    app: 'OutfitVault API',
+    version: '1.0.0',
+    health: '/api/v1/health',
+  });
+});
+
 // Ruta de prueba / health check
 app.get('/api/v1/health', (req, res) => {
   res.json({

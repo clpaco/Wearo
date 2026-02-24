@@ -1,11 +1,12 @@
 // Pantalla de Login — diseño moderno con soporte claro/oscuro
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity,
     StyleSheet, KeyboardAvoidingView, Platform,
-    ActivityIndicator, Alert, StatusBar,
+    ActivityIndicator, Alert, StatusBar, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginUser, clearError } from '../store/authSlice';
 import { useTheme } from '../hooks/useTheme';
@@ -14,11 +15,16 @@ const LoginScreen = ({ navigation }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const dispatch = useDispatch();
     const { isLoading, error } = useSelector((state) => state.auth);
     const { theme } = useTheme();
     const c = theme.colors;
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    }, []);
 
     const handleLogin = () => {
         if (!email.trim() || !password.trim()) {
@@ -36,9 +42,12 @@ const LoginScreen = ({ navigation }) => {
         >
             <StatusBar barStyle={c.statusBar} />
 
+            <Animated.View style={{ opacity: fadeAnim }}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={[styles.logo, { color: c.primary }]}>🧥</Text>
+                <View style={[styles.logoCircle, { backgroundColor: c.primary + '20' }]}>
+                    <Ionicons name="shirt-outline" size={40} color={c.primary} />
+                </View>
                 <Text style={[styles.title, { color: c.text }]}>OutfitVault</Text>
                 <Text style={[styles.subtitle, { color: c.textSecondary }]}>
                     Tu armario inteligente
@@ -57,32 +66,28 @@ const LoginScreen = ({ navigation }) => {
 
                 <View style={styles.inputGroup}>
                     <Text style={[styles.label, { color: c.textSecondary }]}>Email</Text>
-                    <TextInput
-                        style={[styles.input, {
-                            backgroundColor: c.inputBg,
-                            borderColor: c.inputBorder,
-                            color: c.inputText,
-                        }]}
-                        placeholder="tu@email.com"
-                        placeholderTextColor={c.placeholder}
-                        value={email}
-                        onChangeText={(text) => { setEmail(text); dispatch(clearError()); }}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                    />
+                    <View style={[styles.inputRow, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}>
+                        <Ionicons name="mail-outline" size={18} color={c.textMuted} style={styles.inputIcon} />
+                        <TextInput
+                            style={[styles.input, { color: c.inputText }]}
+                            placeholder="tu@email.com"
+                            placeholderTextColor={c.placeholder}
+                            value={email}
+                            onChangeText={(text) => { setEmail(text); dispatch(clearError()); }}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                    </View>
                 </View>
 
                 <View style={styles.inputGroup}>
                     <Text style={[styles.label, { color: c.textSecondary }]}>Contraseña</Text>
-                    <View style={styles.passwordRow}>
+                    <View style={[styles.inputRow, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}>
+                        <Ionicons name="lock-closed-outline" size={18} color={c.textMuted} style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, styles.passwordInput, {
-                                backgroundColor: c.inputBg,
-                                borderColor: c.inputBorder,
-                                color: c.inputText,
-                            }]}
-                            placeholder="••••••••"
+                            style={[styles.input, { color: c.inputText }]}
+                            placeholder="Tu contraseña"
                             placeholderTextColor={c.placeholder}
                             value={password}
                             onChangeText={(text) => { setPassword(text); dispatch(clearError()); }}
@@ -90,10 +95,10 @@ const LoginScreen = ({ navigation }) => {
                             autoCapitalize="none"
                         />
                         <TouchableOpacity
-                            style={[styles.eyeBtn, { borderColor: c.inputBorder }]}
+                            style={styles.eyeBtn}
                             onPress={() => setShowPassword(!showPassword)}
                         >
-                            <Text style={{ fontSize: 18 }}>{showPassword ? '🙈' : '👁️'}</Text>
+                            <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={c.textSecondary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -107,7 +112,10 @@ const LoginScreen = ({ navigation }) => {
                     {isLoading ? (
                         <ActivityIndicator color="#FFF" />
                     ) : (
-                        <Text style={styles.buttonText}>Entrar</Text>
+                        <View style={styles.buttonContent}>
+                            <Ionicons name="log-in-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                            <Text style={styles.buttonText}>Entrar</Text>
+                        </View>
                     )}
                 </TouchableOpacity>
 
@@ -121,6 +129,7 @@ const LoginScreen = ({ navigation }) => {
                     <Text style={[styles.linkBold, { color: c.primary }]}>Regístrate</Text>
                 </TouchableOpacity>
             </View>
+            </Animated.View>
         </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -139,9 +148,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 32,
     },
-    logo: {
-        fontSize: 56,
-        marginBottom: 8,
+    logoCircle: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
     },
     title: {
         fontSize: 32,
@@ -186,28 +199,26 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: 6,
     },
-    input: {
+    inputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         borderWidth: 1,
         borderRadius: 12,
-        paddingHorizontal: 16,
+        overflow: 'hidden',
+    },
+    inputIcon: {
+        paddingLeft: 14,
+    },
+    input: {
+        flex: 1,
+        paddingHorizontal: 12,
         paddingVertical: 14,
         fontSize: 16,
     },
-    passwordRow: {
-        flexDirection: 'row',
-    },
-    passwordInput: {
-        flex: 1,
-        borderTopRightRadius: 0,
-        borderBottomRightRadius: 0,
-    },
     eyeBtn: {
-        borderWidth: 1,
-        borderLeftWidth: 0,
-        borderTopRightRadius: 12,
-        borderBottomRightRadius: 12,
         paddingHorizontal: 14,
         justifyContent: 'center',
+        alignSelf: 'stretch',
     },
     button: {
         borderRadius: 12,
@@ -219,6 +230,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 4,
+    },
+    buttonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     buttonText: {
         color: '#FFF',

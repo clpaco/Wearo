@@ -11,6 +11,7 @@ import {
     toggleFollow, fetchFollowers, fetchFollowing, clearViewedProfile,
 } from '../store/profileSlice';
 import { fetchComments, addComment, removeComment } from '../store/socialSlice';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
@@ -156,10 +157,13 @@ const ProfileScreen = ({ navigation, route }) => {
                 {thumb ? (
                     <Image source={{ uri: `${IMAGE_BASE_URL}${thumb}` }} style={styles.postThumbImg} />
                 ) : (
-                    <Text style={{ fontSize: 26 }}>👔</Text>
+                    <Ionicons name="albums-outline" size={26} color={c.textMuted} />
                 )}
                 <View style={[styles.postThumbOverlay, { backgroundColor: 'rgba(0,0,0,0.28)' }]}>
-                    <Text style={styles.postThumbLike}>❤ {post.like_count}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <Ionicons name="heart" size={12} color="#FFF" />
+                        <Text style={styles.postThumbLike}>{post.like_count}</Text>
+                    </View>
                 </View>
             </TouchableOpacity>
         );
@@ -265,7 +269,7 @@ const ProfileScreen = ({ navigation, route }) => {
                                 {listModal === 'followers' ? 'Seguidores' : 'Siguiendo'}
                             </Text>
                             <TouchableOpacity onPress={() => setListModal(null)}>
-                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                                <Ionicons name="close" size={22} color={c.primary} />
                             </TouchableOpacity>
                         </View>
                         <FlatList
@@ -299,9 +303,12 @@ const ProfileScreen = ({ navigation, route }) => {
                         {/* Header */}
                         <View style={styles.modalHeader}>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.modalTitle, { color: c.text }]} numberOfLines={1}>
-                                    👔 {selectedPost?.outfit?.name || selectedPost?.outfit_name || 'Outfit'}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                    <Ionicons name="albums-outline" size={18} color={c.text} style={{ marginRight: 6 }} />
+                                    <Text style={[styles.modalTitle, { color: c.text }]} numberOfLines={1}>
+                                        {selectedPost?.outfit?.name || selectedPost?.outfit_name || 'Outfit'}
+                                    </Text>
+                                </View>
                                 {selectedPost?.caption ? (
                                     <Text style={[styles.postCaption, { color: c.textSecondary }]} numberOfLines={2}>
                                         {selectedPost.caption}
@@ -309,15 +316,22 @@ const ProfileScreen = ({ navigation, route }) => {
                                 ) : null}
                             </View>
                             <TouchableOpacity onPress={() => setSelectedPost(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                                <Ionicons name="close" size={22} color={c.primary} />
                             </TouchableOpacity>
                         </View>
 
                         {/* Stats */}
                         <View style={[styles.postStats, { borderBottomColor: c.border }]}>
-                            <Text style={[styles.postStatText, { color: c.textMuted }]}>
-                                ❤ {selectedPost?.like_count || 0} &nbsp; 💬 {postComments.length}
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="heart" size={14} color={c.textMuted} />
+                                    <Text style={[styles.postStatText, { color: c.textMuted }]}>{selectedPost?.like_count || 0}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="chatbubble-outline" size={14} color={c.textMuted} />
+                                    <Text style={[styles.postStatText, { color: c.textMuted }]}>{postComments.length}</Text>
+                                </View>
+                            </View>
                         </View>
 
                         {/* Comentarios */}
@@ -367,7 +381,7 @@ const ProfileScreen = ({ navigation, route }) => {
                                                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                                     style={{ marginLeft: 8 }}
                                                 >
-                                                    <Text style={{ fontSize: 14 }}>🗑️</Text>
+                                                    <Ionicons name="trash-outline" size={16} color={c.error} />
                                                 </TouchableOpacity>
                                             )}
                                         </View>
@@ -395,7 +409,7 @@ const ProfileScreen = ({ navigation, route }) => {
                                 disabled={!commentInput.trim()}
                                 activeOpacity={0.8}
                             >
-                                <Text style={{ color: '#FFF', fontSize: 15 }}>↑</Text>
+                                <Ionicons name="arrow-up" size={18} color="#FFF" />
                             </TouchableOpacity>
                         </View>
                     </View>

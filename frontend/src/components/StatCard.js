@@ -1,6 +1,7 @@
 // Componente StatCard reutilizable
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 
 const StatCard = ({ value, label, icon, color, style }) => {
@@ -18,7 +19,7 @@ const StatCard = ({ value, label, icon, color, style }) => {
                 style,
             ]}
         >
-            {icon && <Text style={styles.icon}>{icon}</Text>}
+            {icon && <Ionicons name={icon} size={22} color={color || theme.colors.primary} style={styles.icon} />}
             <Text style={[styles.value, { color: color || theme.colors.primary }]}>
                 {value ?? '–'}
             </Text>
@@ -38,7 +39,6 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     icon: {
-        fontSize: 22,
         marginBottom: 6,
     },
     value: {

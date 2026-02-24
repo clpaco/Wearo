@@ -7,6 +7,7 @@ import {
 import { useDispatch } from 'react-redux';
 import { removeOutfit } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 
@@ -84,7 +85,7 @@ const OutfitDetailScreen = ({ navigation, route }) => {
                                 <Image source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }} style={styles.garmentImg} />
                             ) : (
                                 <View style={[styles.garmentPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                                    <Text style={{ fontSize: 28 }}>👕</Text>
+                                    <Ionicons name="shirt-outline" size={28} color={c.textMuted} />
                                 </View>
                             )}
                             <View style={styles.garmentInfo}>
@@ -101,7 +102,10 @@ const OutfitDetailScreen = ({ navigation, route }) => {
                         style={[styles.deleteBtn, { borderColor: c.error }]}
                         onPress={handleDelete}
                     >
-                        <Text style={[styles.deleteBtnText, { color: c.error }]}>🗑️ Eliminar Outfit</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="trash-outline" size={16} color={c.error} />
+                            <Text style={[styles.deleteBtnText, { color: c.error }]}>Eliminar Outfit</Text>
+                        </View>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

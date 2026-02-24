@@ -7,6 +7,7 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchAllStats } from '../store/statsSlice';
 import { useTheme } from '../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
 import StatCard from '../components/StatCard';
 
@@ -129,7 +130,7 @@ const StatsScreen = ({ navigation }) => {
         return (
             <View style={[styles.container, styles.center, { backgroundColor: c.background }]}>
                 <StatusBar barStyle={c.statusBar} />
-                <Text style={{ fontSize: 40, marginBottom: 12 }}>😞</Text>
+                <Text style={{ fontSize: 40, marginBottom: 12 }}><Ionicons name="sad-outline" size={40} color={c.textMuted} /></Text>
                 <Text style={[styles.errorText, { color: c.error }]}>{error}</Text>
                 <TouchableOpacity
                     style={[styles.retryBtn, { backgroundColor: c.primary }]}
@@ -153,7 +154,7 @@ const StatsScreen = ({ navigation }) => {
                 onBack={() => navigation.goBack()}
                 rightAction={
                     <TouchableOpacity onPress={() => dispatch(fetchAllStats())} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text style={{ fontSize: 20, color: c.primary }}>↻</Text>
+                        <Ionicons name="refresh" size={20} color={c.primary} />
                     </TouchableOpacity>
                 }
             />
@@ -161,10 +162,10 @@ const StatsScreen = ({ navigation }) => {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 {/* Tarjetas resumen */}
                 <View style={styles.overviewGrid}>
-                    <StatCard icon="👕" label="Prendas" value={overview.total_garments ?? 0} color="#6C5CE7" />
-                    <StatCard icon="👔" label="Outfits" value={overview.total_outfits ?? 0} color="#00CEC9" />
-                    <StatCard icon="📅" label="Planificados" value={overview.total_planned ?? 0} color="#FDCB6E" />
-                    <StatCard icon="⭐" label="Favoritos" value={(parseInt(overview.favorite_garments || 0) + parseInt(overview.favorite_outfits || 0))} color="#E17055" />
+                    <StatCard icon="shirt-outline" label="Prendas" value={overview.total_garments ?? 0} color="#6C5CE7" />
+                    <StatCard icon="albums-outline" label="Outfits" value={overview.total_outfits ?? 0} color="#00CEC9" />
+                    <StatCard icon="calendar-outline" label="Planificados" value={overview.total_planned ?? 0} color="#FDCB6E" />
+                    <StatCard icon="star" label="Favoritos" value={(parseInt(overview.favorite_garments || 0) + parseInt(overview.favorite_outfits || 0))} color="#E17055" />
                 </View>
 
                 {/* Prendas por categoría */}
@@ -240,7 +241,7 @@ const StatsScreen = ({ navigation }) => {
                 {/* Mensaje vacío */}
                 {categorias.length === 0 && colores.length === 0 && (
                     <View style={[styles.emptyCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-                        <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>📊</Text>
+                        <Ionicons name="bar-chart-outline" size={48} color={c.textMuted} style={{ textAlign: 'center', marginBottom: 12 }} />
                         <Text style={[styles.emptyTitle, { color: c.text }]}>Sin datos todavía</Text>
                         <Text style={[styles.emptyText, { color: c.textMuted }]}>
                             Añade prendas y crea outfits para ver tus estadísticas aquí.

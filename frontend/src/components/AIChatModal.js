@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
     StyleSheet, Modal, KeyboardAvoidingView, Platform,
-    ActivityIndicator, StatusBar,
+    ActivityIndicator, StatusBar, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -13,19 +13,30 @@ import {
 } from '../store/aiSlice';
 import { useTheme } from '../hooks/useTheme';
 
-// Emoji por categoría de prenda para el modo shopping
-const categoryEmoji = (cat) => {
+// Icono Ionicons por categoría de prenda para el modo shopping
+const categoryIcon = (cat) => {
     const map = {
-        'camisa': '👘', 'camiseta': '👕', 'pantalón': '👖', 'pantalones': '👖',
-        'vestido': '👗', 'falda': '👗', 'chaqueta': '🧥', 'abrigo': '🧥',
-        'zapatos': '👟', 'zapatillas': '👟', 'botas': '👢', 'accesorio': '💍',
-        'bolso': '👜', 'sombrero': '🎩', 'cinturón': '🪢', 'jersey': '🧶',
+        'camisa': 'shirt-outline', 'camiseta': 'shirt-outline', 'pantalón': 'cut-outline', 'pantalones': 'cut-outline',
+        'vestido': 'flower-outline', 'falda': 'flower-outline', 'chaqueta': 'snow-outline', 'abrigo': 'snow-outline',
+        'zapatos': 'footsteps-outline', 'zapatillas': 'footsteps-outline', 'botas': 'footsteps-outline', 'accesorio': 'diamond-outline',
+        'bolso': 'bag-outline', 'sombrero': 'hat-outline', 'cinturón': 'ribbon-outline', 'jersey': 'shirt-outline',
     };
     const lower = (cat || '').toLowerCase();
-    for (const [key, emoji] of Object.entries(map)) {
-        if (lower.includes(key)) return emoji;
+    for (const [key, icon] of Object.entries(map)) {
+        if (lower.includes(key)) return icon;
     }
-    return '🛍️';
+    return 'bag-outline';
+};
+
+// Animated wrapper for AI messages with fade-in
+const AnimatedMessage = ({ children, isUser }) => {
+    const fadeAnim = useRef(new Animated.Value(isUser ? 1 : 0)).current;
+    useEffect(() => {
+        if (!isUser) {
+            Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+        }
+    }, []);
+    return <Animated.View style={{ opacity: fadeAnim }}>{children}</Animated.View>;
 };
 
 const timeAgo = (date) => {
@@ -89,6 +100,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
     const renderMessage = ({ item, index }) => {
         const isUser = item.role === 'user';
         return (
+            <AnimatedMessage isUser={isUser}>
             <View
                 key={index}
                 style={[
@@ -98,7 +110,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
             >
                 {!isUser && (
                     <View style={[styles.aiAvatar, { backgroundColor: c.primary + '20' }]}>
-                        <Text style={{ fontSize: 14 }}>🤖</Text>
+                        <Ionicons name="sparkles" size={16} color={c.primary} />
                     </View>
                 )}
                 <View
@@ -114,13 +126,14 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                     </Text>
                 </View>
             </View>
+            </AnimatedMessage>
         );
     };
 
     // ── Render tarjeta de compra (modo shopping) ─────────────────────────────
     const renderShoppingCard = ({ item }) => (
         <View style={[styles.shopCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <Text style={styles.shopEmoji}>{categoryEmoji(item.category)}</Text>
+            <Ionicons name={categoryIcon(item.category)} size={32} color={c.primary} style={styles.shopIcon} />
             <View style={{ flex: 1 }}>
                 <Text style={[styles.shopName, { color: c.text }]}>{item.name}</Text>
                 <Text style={[styles.shopDesc, { color: c.textSecondary }]} numberOfLines={2}>
@@ -148,9 +161,12 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                         <Ionicons name="close" size={24} color={c.text} />
                     </TouchableOpacity>
                     <View style={{ flex: 1, marginHorizontal: 12 }}>
-                        <Text style={[styles.headerTitle, { color: c.text }]}>
-                            {isOutfits ? '🤖 StyleAI — Chat de outfits' : '🛍️ Qué me falta comprar'}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name={isOutfits ? 'sparkles' : 'bag-outline'} size={16} color={c.text} />
+                            <Text style={[styles.headerTitle, { color: c.text }]}>
+                                {isOutfits ? 'StyleAI — Chat de outfits' : 'Qué me falta comprar'}
+                            </Text>
+                        </View>
                         <Text style={[styles.headerSub, { color: c.textSecondary }]}>
                             {isOutfits ? 'Pregunta sobre tu armario' : 'Sugerencias personalizadas con Gemini AI'}
                         </Text>
@@ -168,7 +184,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                         {/* Mensaje de bienvenida si no hay chat */}
                         {chatMessages.length === 0 && !isLoading && (
                             <View style={styles.welcomeWrap}>
-                                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>🤖</Text>
+                                <Ionicons name="sparkles" size={44} color={c.primary} style={{ textAlign: 'center', marginBottom: 12 }} />
                                 <Text style={[styles.welcomeTitle, { color: c.text }]}>StyleAI listo</Text>
                                 <Text style={[styles.welcomeText, { color: c.textSecondary }]}>
                                     Puedo ayudarte a elegir qué ponerte. Prueba con:
@@ -201,7 +217,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                         {isLoading && (
                             <View style={styles.typingRow}>
                                 <View style={[styles.aiAvatar, { backgroundColor: c.primary + '20' }]}>
-                                    <Text style={{ fontSize: 14 }}>🤖</Text>
+                                    <Ionicons name="sparkles" size={16} color={c.primary} />
                                 </View>
                                 <View style={[styles.typingBubble, { backgroundColor: c.surface, borderColor: c.border }]}>
                                     <ActivityIndicator size="small" color={c.primary} />
@@ -258,7 +274,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                             />
                         ) : (
                             <View style={styles.centeredLoad}>
-                                <Text style={{ fontSize: 40, marginBottom: 12 }}>🛍️</Text>
+                                <Ionicons name="bag-outline" size={44} color={c.textSecondary} style={{ marginBottom: 12 }} />
                                 <Text style={[{ color: c.textSecondary, textAlign: 'center' }]}>
                                     No se pudieron obtener sugerencias.{'\n'}Verifica que GEMINI_API_KEY está configurada.
                                 </Text>
@@ -322,7 +338,7 @@ const styles = StyleSheet.create({
     shopList: { padding: 16 },
     shopHeader: { fontSize: 13, marginBottom: 16, lineHeight: 18 },
     shopCard: { flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12, gap: 12 },
-    shopEmoji: { fontSize: 32, marginTop: 2 },
+    shopIcon: { marginTop: 2 },
     shopName: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
     shopDesc: { fontSize: 13, lineHeight: 18, marginBottom: 6 },
     shopReason: { fontSize: 12, fontWeight: '600' },

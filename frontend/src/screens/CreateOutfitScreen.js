@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchGarments } from '../store/wardrobeSlice';
 import { addOutfit } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 
@@ -74,7 +75,7 @@ const CreateOutfitScreen = ({ navigation }) => {
                     <Image source={{ uri: `${IMAGE_BASE_URL}${item.image_url}` }} style={styles.garmentImg} />
                 ) : (
                     <View style={[styles.garmentPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                        <Text style={{ fontSize: 24 }}>👕</Text>
+                        <Ionicons name="shirt-outline" size={24} color={c.textMuted} />
                     </View>
                 )}
                 <Text style={[styles.garmentName, { color: c.text }]} numberOfLines={1}>

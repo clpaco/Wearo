@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateMyProfile, uploadAvatar } from '../store/profileSlice';
 import { useTheme } from '../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 
@@ -81,7 +82,7 @@ const EditProfileScreen = ({ navigation }) => {
                             <ActivityIndicator style={styles.avatarLoader} color={c.primary} />
                         ) : (
                             <View style={[styles.cameraBadge, { backgroundColor: c.primary }]}>
-                                <Text style={{ color: '#FFF', fontSize: 14 }}>📷</Text>
+                                <Ionicons name="camera" size={14} color="#FFF" />
                             </View>
                         )}
                     </TouchableOpacity>

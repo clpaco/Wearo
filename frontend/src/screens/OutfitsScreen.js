@@ -1,19 +1,43 @@
 // Pantalla de listado de Outfits
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, Image,
     StyleSheet, RefreshControl, ActivityIndicator, StatusBar,
+    LayoutAnimation, UIManager, Platform,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchOutfits, removeOutfit } from '../store/outfitsSlice';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import AIChatModal from '../components/AIChatModal';
 
+// Habilitar LayoutAnimation en Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const CITY_KEY = 'userCity';
+
+const OCCASIONS = [
+    { key: null, label: 'Todas', icon: 'grid-outline' },
+    { key: 'casual', label: 'Casual', icon: 'cafe-outline' },
+    { key: 'trabajo', label: 'Trabajo', icon: 'briefcase-outline' },
+    { key: 'formal', label: 'Formal', icon: 'diamond-outline' },
+    { key: 'deporte', label: 'Deporte', icon: 'fitness-outline' },
+    { key: 'fiesta', label: 'Fiesta', icon: 'musical-notes-outline' },
+];
+
+const SEASONS = [
+    { key: null, label: 'Todas', icon: 'infinite-outline' },
+    { key: 'primavera', label: 'Primavera', icon: 'flower-outline' },
+    { key: 'verano', label: 'Verano', icon: 'sunny-outline' },
+    { key: 'otoño', label: 'Otoño', icon: 'leaf-outline' },
+    { key: 'invierno', label: 'Invierno', icon: 'snow-outline' },
+];
 
 const OutfitsScreen = ({ navigation }) => {
     const dispatch = useDispatch();
@@ -24,6 +48,9 @@ const OutfitsScreen = ({ navigation }) => {
     const [aiModalVisible, setAiModalVisible] = useState(false);
     const [aiModalMode, setAiModalMode] = useState('outfits');
     const [city, setCity] = useState(null);
+    const [activeOccasion, setActiveOccasion] = useState(null);
+    const [activeSeason, setActiveSeason] = useState(null);
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
     useEffect(() => {
         dispatch(fetchOutfits());
@@ -39,6 +66,35 @@ const OutfitsScreen = ({ navigation }) => {
         setRefreshing(true);
         dispatch(fetchOutfits()).finally(() => setRefreshing(false));
     }, [dispatch]);
+
+    // Filtrar outfits por ocasión, temporada y favoritos (client-side)
+    const filteredOutfits = useMemo(() => {
+        let result = outfits;
+
+        // Filtro por ocasión
+        if (activeOccasion) {
+            result = result.filter((o) => {
+                if (!o.occasion) return false;
+                return o.occasion.toLowerCase() === activeOccasion;
+            });
+        }
+
+        // Filtro por temporada
+        if (activeSeason) {
+            result = result.filter((o) => {
+                if (!o.season) return false;
+                const s = o.season.toLowerCase();
+                return s === activeSeason || s === 'todo el año' || s === 'todas';
+            });
+        }
+
+        // Filtro por favoritos
+        if (showFavoritesOnly) {
+            result = result.filter((o) => o.is_favorite === true);
+        }
+
+        return result;
+    }, [outfits, activeOccasion, activeSeason, showFavoritesOnly]);
 
     const renderOutfit = ({ item }) => {
         const garments = typeof item.garments === 'string' ? JSON.parse(item.garments) : item.garments;
@@ -60,13 +116,13 @@ const OutfitsScreen = ({ navigation }) => {
                             />
                         ) : (
                             <View key={g.id || i} style={[styles.mosaicPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                                <Text style={{ fontSize: 20 }}>👕</Text>
+                                <Ionicons name="shirt-outline" size={20} color={c.textMuted} />
                             </View>
                         )
                     ))}
                     {garments.length === 0 && (
                         <View style={[styles.mosaicPlaceholder, styles.mosaicSingle, { backgroundColor: c.surfaceVariant }]}>
-                            <Text style={{ fontSize: 32 }}>👔</Text>
+                            <Ionicons name="albums-outline" size={32} color={c.textMuted} />
                         </View>
                     )}
                 </View>
@@ -76,7 +132,7 @@ const OutfitsScreen = ({ navigation }) => {
                         <Text style={[styles.outfitName, { color: c.text }]} numberOfLines={1}>
                             {item.name}
                         </Text>
-                        {item.is_favorite && <Text>❤️</Text>}
+                        {item.is_favorite && <Ionicons name="heart" size={18} color={c.error || '#E17055'} />}
                     </View>
                     <Text style={[styles.outfitMeta, { color: c.textSecondary }]}>
                         {garments.length} prenda{garments.length !== 1 ? 's' : ''}
@@ -99,14 +155,36 @@ const OutfitsScreen = ({ navigation }) => {
             {/* Header */}
             <ScreenHeader
                 title="Mis Outfits"
-                subtitle={`${outfits.length} outfit${outfits.length !== 1 ? 's' : ''}`}
+                subtitle={`${filteredOutfits.length} outfit${filteredOutfits.length !== 1 ? 's' : ''}`}
                 rightAction={
-                    <TouchableOpacity
-                        style={[styles.addBtn, { backgroundColor: c.primary }]}
-                        onPress={() => navigation.navigate('CreateOutfit')}
-                    >
-                        <Text style={styles.addBtnText}>+</Text>
-                    </TouchableOpacity>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={[
+                                styles.favBtn,
+                                {
+                                    backgroundColor: showFavoritesOnly
+                                        ? (c.error || '#E17055') + '20'
+                                        : c.surfaceVariant,
+                                },
+                            ]}
+                            onPress={() => {
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                setShowFavoritesOnly(!showFavoritesOnly);
+                            }}
+                        >
+                            <Ionicons
+                                name={showFavoritesOnly ? 'heart' : 'heart-outline'}
+                                size={18}
+                                color={showFavoritesOnly ? (c.error || '#E17055') : c.textSecondary}
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.addBtn, { backgroundColor: c.primary }]}
+                            onPress={() => navigation.navigate('CreateOutfit')}
+                        >
+                            <Text style={styles.addBtnText}>+</Text>
+                        </TouchableOpacity>
+                    </View>
                 }
             />
 
@@ -117,7 +195,7 @@ const OutfitsScreen = ({ navigation }) => {
                     onPress={() => openAI('outfits')}
                     activeOpacity={0.8}
                 >
-                    <Text style={{ fontSize: 15 }}>🤖</Text>
+                    <Ionicons name="sparkles" size={16} color={c.primary} />
                     <Text style={[styles.aiPillText, { color: c.primary }]}>Chat IA</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -125,9 +203,77 @@ const OutfitsScreen = ({ navigation }) => {
                     onPress={() => openAI('shopping')}
                     activeOpacity={0.8}
                 >
-                    <Text style={{ fontSize: 15 }}>🛍️</Text>
+                    <Ionicons name="bag-outline" size={16} color={c.accent} />
                     <Text style={[styles.aiPillText, { color: c.accent }]}>Qué me falta</Text>
                 </TouchableOpacity>
+            </View>
+
+            {/* Filtros de ocasión */}
+            <View style={styles.filtersRow}>
+                <FlatList
+                    data={OCCASIONS}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={(item) => item.key || 'all-occasion'}
+                    contentContainerStyle={styles.filtersContent}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            style={[
+                                styles.filterChip,
+                                {
+                                    backgroundColor: activeOccasion === item.key ? c.primary : c.surface,
+                                    borderColor: activeOccasion === item.key ? c.primary : c.border,
+                                },
+                            ]}
+                            onPress={() => {
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                setActiveOccasion(item.key);
+                            }}
+                        >
+                            <Ionicons name={item.icon} size={16} color={activeOccasion === item.key ? '#FFF' : c.textSecondary} style={{ marginRight: 4 }} />
+                            <Text style={[
+                                styles.filterLabel,
+                                { color: activeOccasion === item.key ? '#FFF' : c.textSecondary },
+                            ]}>
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                />
+            </View>
+
+            {/* Filtros de temporada */}
+            <View style={styles.filtersRow}>
+                <FlatList
+                    data={SEASONS}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={(item) => item.key || 'all-season'}
+                    contentContainerStyle={styles.filtersContent}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            style={[
+                                styles.filterChip,
+                                {
+                                    backgroundColor: activeSeason === item.key ? c.primary : c.surface,
+                                    borderColor: activeSeason === item.key ? c.primary : c.border,
+                                },
+                            ]}
+                            onPress={() => {
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                setActiveSeason(item.key);
+                            }}
+                        >
+                            <Ionicons name={item.icon} size={16} color={activeSeason === item.key ? '#FFF' : c.textSecondary} style={{ marginRight: 4 }} />
+                            <Text style={[
+                                styles.filterLabel,
+                                { color: activeSeason === item.key ? '#FFF' : c.textSecondary },
+                            ]}>
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                />
             </View>
 
             {/* Lista */}
@@ -135,16 +281,24 @@ const OutfitsScreen = ({ navigation }) => {
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color={c.primary} />
                 </View>
-            ) : outfits.length === 0 ? (
+            ) : filteredOutfits.length === 0 ? (
                 <EmptyState
-                    icon="👔"
-                    title="¡Sin outfits aún!"
-                    description="Combina tus prendas para crear tu primer outfit"
-                    action={{ label: '+ Crear Outfit', onPress: () => navigation.navigate('CreateOutfit') }}
+                    icon="albums-outline"
+                    title={outfits.length === 0 ? '¡Sin outfits aún!' : 'Sin resultados'}
+                    description={
+                        outfits.length === 0
+                            ? 'Combina tus prendas para crear tu primer outfit'
+                            : 'No hay outfits con los filtros seleccionados'
+                    }
+                    action={
+                        outfits.length === 0
+                            ? { label: '+ Crear Outfit', onPress: () => navigation.navigate('CreateOutfit') }
+                            : undefined
+                    }
                 />
             ) : (
                 <FlatList
-                    data={outfits}
+                    data={filteredOutfits}
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={styles.listContent}
                     renderItem={renderOutfit}
@@ -166,8 +320,21 @@ const OutfitsScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    favBtn: {
+        width: 36, height: 36, borderRadius: 18,
+        justifyContent: 'center', alignItems: 'center',
+    },
     addBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
     addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 20, lineHeight: 22 },
+    filtersRow: { marginTop: 8 },
+    filtersContent: { paddingHorizontal: 16, gap: 8 },
+    filterChip: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 14, paddingVertical: 8,
+        borderRadius: 20, borderWidth: 1, marginRight: 8,
+    },
+    filterLabel: { fontSize: 14, fontWeight: '600' },
     listContent: { padding: 16 },
     outfitCard: {
         borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 16,

@@ -1,9 +1,11 @@
 // Pantalla del Armario — listado de prendas con filtros y diseño moderno
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, Image,
     StyleSheet, RefreshControl, ActivityIndicator, StatusBar,
+    LayoutAnimation, UIManager, Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchGarments, removeGarment, setFilter } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
@@ -11,15 +13,29 @@ import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 
+// Habilitar LayoutAnimation en Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const CATEGORIES = [
-    { key: null, label: 'Todas', icon: '👗' },
-    { key: 'camisetas', label: 'Camisetas', icon: '👕' },
-    { key: 'pantalones', label: 'Pantalones', icon: '👖' },
-    { key: 'zapatos', label: 'Zapatos', icon: '👟' },
-    { key: 'chaquetas', label: 'Chaquetas', icon: '🧥' },
-    { key: 'accesorios', label: 'Accesorios', icon: '🎒' },
-    { key: 'vestidos', label: 'Vestidos', icon: '👗' },
-    { key: 'otro', label: 'Otro', icon: '🏷️' },
+    { key: null, label: 'Todas', icon: 'shirt-outline' },
+    { key: 'camisetas', label: 'Camisetas', icon: 'shirt-outline' },
+    { key: 'pantalones', label: 'Pantalones', icon: 'cut-outline' },
+    { key: 'zapatos', label: 'Zapatos', icon: 'footsteps-outline' },
+    { key: 'chaquetas', label: 'Chaquetas', icon: 'snow-outline' },
+    { key: 'sudaderas', label: 'Sudaderas', icon: 'body-outline' },
+    { key: 'accesorios', label: 'Accesorios', icon: 'glasses-outline' },
+    { key: 'vestidos', label: 'Vestidos', icon: 'flower-outline' },
+    { key: 'otro', label: 'Otro', icon: 'pricetag-outline' },
+];
+
+const SEASONS = [
+    { key: null, label: 'Todas', icon: 'infinite-outline' },
+    { key: 'primavera', label: 'Primavera', icon: 'flower-outline' },
+    { key: 'verano', label: 'Verano', icon: 'sunny-outline' },
+    { key: 'otoño', label: 'Otoño', icon: 'leaf-outline' },
+    { key: 'invierno', label: 'Invierno', icon: 'snow-outline' },
 ];
 
 const WardrobeScreen = ({ navigation }) => {
@@ -28,23 +44,52 @@ const WardrobeScreen = ({ navigation }) => {
     const { theme, isDark, toggleTheme } = useTheme();
     const c = theme.colors;
     const [refreshing, setRefreshing] = useState(false);
+    const [activeSeason, setActiveSeason] = useState(null);
+    const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
     // Cargar prendas al montar
     useEffect(() => {
-        dispatch(fetchGarments(activeFilter ? { category: activeFilter } : {}));
-    }, [dispatch, activeFilter]);
+        dispatch(fetchGarments({}));
+    }, [dispatch]);
 
     // Pull-to-refresh
     const onRefresh = useCallback(() => {
         setRefreshing(true);
-        dispatch(fetchGarments(activeFilter ? { category: activeFilter } : {}))
+        dispatch(fetchGarments({}))
             .finally(() => setRefreshing(false));
-    }, [dispatch, activeFilter]);
+    }, [dispatch]);
 
     // Filtrar por categoría
     const handleFilter = (key) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         dispatch(setFilter(key));
     };
+
+    // Filtrar prendas por categoría, temporada y favoritos (client-side)
+    const filteredGarments = useMemo(() => {
+        let result = garments;
+
+        // Filtro por categoría
+        if (activeFilter) {
+            result = result.filter((g) => g.category === activeFilter);
+        }
+
+        // Filtro por temporada
+        if (activeSeason) {
+            result = result.filter((g) => {
+                if (!g.season) return false;
+                const s = g.season.toLowerCase();
+                return s === activeSeason || s === 'todo el año' || s === 'todas';
+            });
+        }
+
+        // Filtro por favoritos
+        if (showFavoritesOnly) {
+            result = result.filter((g) => g.is_favorite === true);
+        }
+
+        return result;
+    }, [garments, activeFilter, activeSeason, showFavoritesOnly]);
 
     // Eliminar prenda
     const handleDelete = (id) => {
@@ -66,7 +111,7 @@ const WardrobeScreen = ({ navigation }) => {
                 />
             ) : (
                 <View style={[styles.garmentImagePlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                    <Text style={{ fontSize: 36 }}>👕</Text>
+                    <Ionicons name="shirt-outline" size={36} color={c.textMuted} />
                 </View>
             )}
             <View style={styles.garmentInfo}>
@@ -82,7 +127,7 @@ const WardrobeScreen = ({ navigation }) => {
             </View>
             {item.is_favorite && (
                 <View style={styles.favBadge}>
-                    <Text>❤️</Text>
+                    <Ionicons name="heart" size={18} color={c.error || '#E17055'} />
                 </View>
             )}
         </TouchableOpacity>
@@ -95,14 +140,34 @@ const WardrobeScreen = ({ navigation }) => {
             {/* Header */}
             <ScreenHeader
                 title="Mi Armario"
-                subtitle={`${garments.length} prenda${garments.length !== 1 ? 's' : ''}`}
+                subtitle={`${filteredGarments.length} prenda${filteredGarments.length !== 1 ? 's' : ''}`}
                 rightAction={
                     <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={[
+                                styles.themeBtn,
+                                {
+                                    backgroundColor: showFavoritesOnly
+                                        ? (c.error || '#E17055') + '20'
+                                        : c.surfaceVariant,
+                                },
+                            ]}
+                            onPress={() => {
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                setShowFavoritesOnly(!showFavoritesOnly);
+                            }}
+                        >
+                            <Ionicons
+                                name={showFavoritesOnly ? 'heart' : 'heart-outline'}
+                                size={18}
+                                color={showFavoritesOnly ? (c.error || '#E17055') : c.textSecondary}
+                            />
+                        </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.themeBtn, { backgroundColor: c.surfaceVariant }]}
                             onPress={toggleTheme}
                         >
-                            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
+                            <Ionicons name={isDark ? 'sunny' : 'moon'} size={18} color={c.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.addBtn, { backgroundColor: c.primary }]}
@@ -133,10 +198,44 @@ const WardrobeScreen = ({ navigation }) => {
                             ]}
                             onPress={() => handleFilter(item.key)}
                         >
-                            <Text style={{ fontSize: 16, marginRight: 4 }}>{item.icon}</Text>
+                            <Ionicons name={item.icon} size={16} color={activeFilter === item.key ? '#FFF' : c.textSecondary} style={{ marginRight: 4 }} />
                             <Text style={[
                                 styles.filterLabel,
                                 { color: activeFilter === item.key ? '#FFF' : c.textSecondary },
+                            ]}>
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                />
+            </View>
+
+            {/* Filtros de temporada */}
+            <View style={styles.filtersRow}>
+                <FlatList
+                    data={SEASONS}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={(item) => item.key || 'all-season'}
+                    contentContainerStyle={styles.filtersContent}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            style={[
+                                styles.filterChip,
+                                {
+                                    backgroundColor: activeSeason === item.key ? c.primary : c.surface,
+                                    borderColor: activeSeason === item.key ? c.primary : c.border,
+                                },
+                            ]}
+                            onPress={() => {
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                                setActiveSeason(item.key);
+                            }}
+                        >
+                            <Ionicons name={item.icon} size={16} color={activeSeason === item.key ? '#FFF' : c.textSecondary} style={{ marginRight: 4 }} />
+                            <Text style={[
+                                styles.filterLabel,
+                                { color: activeSeason === item.key ? '#FFF' : c.textSecondary },
                             ]}>
                                 {item.label}
                             </Text>
@@ -150,16 +249,24 @@ const WardrobeScreen = ({ navigation }) => {
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color={c.primary} />
                 </View>
-            ) : garments.length === 0 ? (
+            ) : filteredGarments.length === 0 ? (
                 <EmptyState
-                    icon="👕"
-                    title="¡Tu armario está vacío!"
-                    description="Pulsa el botón + para agregar tu primera prenda"
-                    action={{ label: '+ Añadir prenda', onPress: () => navigation.navigate('AddGarment') }}
+                    icon="shirt-outline"
+                    title={garments.length === 0 ? '¡Tu armario está vacío!' : 'Sin resultados'}
+                    description={
+                        garments.length === 0
+                            ? 'Pulsa el botón + para agregar tu primera prenda'
+                            : 'No hay prendas con los filtros seleccionados'
+                    }
+                    action={
+                        garments.length === 0
+                            ? { label: '+ Añadir prenda', onPress: () => navigation.navigate('AddGarment') }
+                            : undefined
+                    }
                 />
             ) : (
                 <FlatList
-                    data={garments}
+                    data={filteredGarments}
                     keyExtractor={(item) => item.id.toString()}
                     numColumns={2}
                     contentContainerStyle={styles.gridContent}
@@ -187,7 +294,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
     },
     addBtnText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-    filtersRow: { marginTop: 12 },
+    filtersRow: { marginTop: 8 },
     filtersContent: { paddingHorizontal: 16, gap: 8 },
     filterChip: {
         flexDirection: 'row', alignItems: 'center',
@@ -195,6 +302,7 @@ const styles = StyleSheet.create({
         borderRadius: 20, borderWidth: 1, marginRight: 8,
     },
     filterLabel: { fontSize: 14, fontWeight: '600' },
+    centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     gridContent: { padding: 12 },
     gridRow: { justifyContent: 'space-between', marginBottom: 12 },
     garmentCard: {

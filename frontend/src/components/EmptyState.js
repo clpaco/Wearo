@@ -1,14 +1,15 @@
 // Componente EmptyState reutilizable
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 
-const EmptyState = ({ icon = '📭', title, description, action }) => {
+const EmptyState = ({ icon = 'mail-open-outline', title, description, action }) => {
     const { theme } = useTheme();
 
     return (
         <View style={styles.container}>
-            <Text style={styles.icon}>{icon}</Text>
+            <Ionicons name={icon} size={56} color={theme.colors.textMuted} style={styles.icon} />
             <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
             {description && (
                 <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
@@ -37,7 +38,6 @@ const styles = StyleSheet.create({
         paddingVertical: 48,
     },
     icon: {
-        fontSize: 56,
         marginBottom: 16,
     },
     title: {

@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchMonthEntries, assignOutfitToDate, removeEntry, setSelectedDate, markOutfitWorn } from '../store/calendarSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import ScreenHeader from '../components/ScreenHeader';
 
 const DAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -27,7 +28,6 @@ const CalendarScreen = ({ navigation }) => {
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [showPicker, setShowPicker] = useState(false);
     const [wornLoading, setWornLoading] = useState(false);
-    const [wornDone, setWornDone] = useState(false);
 
     // Cargar entradas del mes
     useEffect(() => {
@@ -41,11 +41,6 @@ const CalendarScreen = ({ navigation }) => {
     useEffect(() => {
         dispatch(fetchOutfits());
     }, [dispatch]);
-
-    // Reset wornDone cuando cambia el día seleccionado
-    useEffect(() => {
-        setWornDone(false);
-    }, [selectedDate]);
 
     // Navegar entre meses
     const changeMonth = (dir) => {
@@ -95,9 +90,13 @@ const CalendarScreen = ({ navigation }) => {
     const handleMarkWorn = async () => {
         setWornLoading(true);
         await dispatch(markOutfitWorn(selectedDate));
-        dispatch(fetchOutfits()); // Refresh outfits to show updated times_worn
+        dispatch(fetchOutfits());
+        // Re-fetch entries so worn flag persists
+        const start = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const end = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${lastDay}`;
+        dispatch(fetchMonthEntries({ startDate: start, endDate: end }));
         setWornLoading(false);
-        setWornDone(true);
     };
 
     const selectedEntry = entries.find((e) => {
@@ -107,6 +106,7 @@ const CalendarScreen = ({ navigation }) => {
 
     const calendarDays = generateCalendarDays();
     const today = new Date().toISOString().split('T')[0];
+    const wornDone = !!selectedEntry?.worn;
     const canMarkWorn = selectedEntry?.outfit_id && selectedDate <= today;
 
     return (
@@ -120,13 +120,13 @@ const CalendarScreen = ({ navigation }) => {
                 {/* Navegación del mes */}
                 <View style={styles.monthNav}>
                     <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthBtn}>
-                        <Text style={[styles.monthArrow, { color: c.primary }]}>◀</Text>
+                        <Ionicons name="chevron-back" size={20} color={c.primary} />
                     </TouchableOpacity>
                     <Text style={[styles.monthLabel, { color: c.text }]}>
                         {MONTHS_ES[currentMonth]} {currentYear}
                     </Text>
                     <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthBtn}>
-                        <Text style={[styles.monthArrow, { color: c.primary }]}>▶</Text>
+                        <Ionicons name="chevron-forward" size={20} color={c.primary} />
                     </TouchableOpacity>
                 </View>
 
@@ -189,7 +189,7 @@ const CalendarScreen = ({ navigation }) => {
                     {selectedEntry ? (
                         <View>
                             <View style={[styles.outfitBadge, { backgroundColor: c.primary + '15' }]}>
-                                <Text style={{ fontSize: 20, marginRight: 8 }}>👔</Text>
+                                <Ionicons name="albums-outline" size={20} color={c.primary} style={{ marginRight: 8 }} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={[styles.outfitLabel, { color: c.primary }]}>Outfit planificado</Text>
                                     <Text style={[styles.outfitName, { color: c.text }]}>
@@ -212,9 +212,12 @@ const CalendarScreen = ({ navigation }) => {
                                     {wornLoading ? (
                                         <ActivityIndicator size="small" color="#FFF" />
                                     ) : (
-                                        <Text style={styles.wornBtnText}>
-                                            {wornDone ? '✅ Marcado como usado' : '✅ Marcar como usado'}
-                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="checkmark-circle" size={16} color="#FFF" />
+                                            <Text style={styles.wornBtnText}>
+                                                {wornDone ? 'Marcado como usado' : 'Marcar como usado'}
+                                            </Text>
+                                        </View>
                                     )}
                                 </TouchableOpacity>
                             )}
@@ -249,7 +252,7 @@ const CalendarScreen = ({ navigation }) => {
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: c.text }]}>Seleccionar Outfit</Text>
                             <TouchableOpacity onPress={() => setShowPicker(false)}>
-                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                                <Ionicons name="close" size={22} color={c.primary} />
                             </TouchableOpacity>
                         </View>
                         <FlatList
@@ -260,7 +263,7 @@ const CalendarScreen = ({ navigation }) => {
                                     style={[styles.outfitOption, { borderBottomColor: c.border }]}
                                     onPress={() => handleAssign(item.id)}
                                 >
-                                    <Text style={{ fontSize: 20, marginRight: 10 }}>👔</Text>
+                                    <Ionicons name="albums-outline" size={20} color={c.primary} style={{ marginRight: 10 }} />
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
                                         <Text style={[styles.optionMeta, { color: c.textMuted }]}>

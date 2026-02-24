@@ -4,6 +4,7 @@ import {
     View, Text, ScrollView, TouchableOpacity, Image,
     StyleSheet, StatusBar, RefreshControl, FlatList,
     Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
+    LayoutAnimation, UIManager,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,11 @@ import { getWeatherByCoords, getWeatherByCity, searchCities } from '../services/
 import { IMAGE_BASE_URL } from '../services/api';
 import Card from '../components/Card';
 import StatCard from '../components/StatCard';
+
+// Habilitar LayoutAnimation en Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const CITY_KEY = 'userCity';
 const CITY_COORDS_KEY = 'userCityCoords';
@@ -37,12 +43,12 @@ const formatDate = () => {
     return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
 };
 
-const weatherEmoji = (temp) => {
-    if (temp == null) return '🌡️';
-    if (temp > 25) return '☀️';
-    if (temp > 15) return '⛅';
-    if (temp > 5)  return '🌥️';
-    return '❄️';
+const weatherIcon = (temp) => {
+    if (temp == null) return 'thermometer-outline';
+    if (temp > 25) return 'sunny';
+    if (temp > 15) return 'partly-sunny';
+    if (temp > 5)  return 'cloud-outline';
+    return 'snow';
 };
 
 const HomeScreen = ({ navigation }) => {
@@ -95,15 +101,19 @@ const HomeScreen = ({ navigation }) => {
     // Obtener clima cuando cambia la ciudad o coords
     useEffect(() => {
         if (!city) return;
+        const animateAndSetWeather = (w) => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setWeather(w);
+        };
         if (cityCoords?.lat && cityCoords?.lon) {
             getWeatherByCoords(cityCoords.lat, cityCoords.lon)
                 .then((w) => {
-                    if (w) setWeather({ ...w, city });
-                    else getWeatherByCity(city).then(setWeather).catch(() => setWeather(null));
+                    if (w) animateAndSetWeather({ ...w, city });
+                    else getWeatherByCity(city).then(animateAndSetWeather).catch(() => animateAndSetWeather(null));
                 })
-                .catch(() => getWeatherByCity(city).then(setWeather).catch(() => setWeather(null)));
+                .catch(() => getWeatherByCity(city).then(animateAndSetWeather).catch(() => animateAndSetWeather(null)));
         } else {
-            getWeatherByCity(city).then(setWeather).catch(() => setWeather(null));
+            getWeatherByCity(city).then(animateAndSetWeather).catch(() => animateAndSetWeather(null));
         }
     }, [city, cityCoords]);
 
@@ -133,6 +143,7 @@ const HomeScreen = ({ navigation }) => {
     const onRefresh = async () => {
         setRefreshing(true);
         await loadData();
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setRefreshing(false);
     };
 
@@ -213,7 +224,7 @@ const HomeScreen = ({ navigation }) => {
                             </TouchableOpacity>
                         </View>
                         <Text style={styles.weatherEmoji}>
-                            {weatherEmoji(weather?.temp)}
+                            <Ionicons name={weatherIcon(weather?.temp)} size={48} color="#FFF" />
                         </Text>
                     </View>
                 </Card>
@@ -224,7 +235,10 @@ const HomeScreen = ({ navigation }) => {
                         {weatherRec ? (
                             <Card style={{ borderLeftWidth: 3, borderLeftColor: c.primary }} padding={14}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <Text style={[{ fontSize: 12, fontWeight: '600', color: c.primary, marginBottom: 4 }]}>💡 SUGERENCIA IA</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <Ionicons name="bulb-outline" size={14} color={c.primary} />
+                                        <Text style={[{ fontSize: 12, fontWeight: '600', color: c.primary, marginBottom: 4 }]}>SUGERENCIA IA</Text>
+                                    </View>
                                     <TouchableOpacity onPress={() => dispatch(clearWeatherRec())} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                                         <Ionicons name="close" size={16} color={c.textMuted} />
                                     </TouchableOpacity>
@@ -244,7 +258,7 @@ const HomeScreen = ({ navigation }) => {
                                 {aiLoading ? (
                                     <ActivityIndicator size="small" color={c.primary} />
                                 ) : (
-                                    <Text style={{ fontSize: 16 }}>💡</Text>
+                                    <Ionicons name="bulb-outline" size={18} color={c.primary} />
                                 )}
                                 <Text style={[styles.aiBtnText, { color: c.primary }]}>
                                     {aiLoading ? 'Pensando…' : 'Sugerencia IA para hoy'}
@@ -257,13 +271,13 @@ const HomeScreen = ({ navigation }) => {
                 {/* Quick Stats */}
                 <Text style={[styles.sectionTitle, { color: c.text }]}>Resumen</Text>
                 <View style={styles.statsRow}>
-                    <StatCard value={resumen?.total_prendas ?? garments.length} label="Prendas" icon="👕" color={c.primary} />
+                    <StatCard value={resumen?.total_prendas ?? garments.length} label="Prendas" icon="shirt-outline" color={c.primary} />
                     <View style={{ width: 10 }} />
-                    <StatCard value={resumen?.total_outfits} label="Outfits" icon="👔" color={c.accent} />
+                    <StatCard value={resumen?.total_outfits} label="Outfits" icon="albums-outline" color={c.accent} />
                     <View style={{ width: 10 }} />
-                    <StatCard value={resumen?.prendas_favoritas} label="Favoritos" icon="❤️" color={c.error} />
+                    <StatCard value={resumen?.prendas_favoritas} label="Favoritos" icon="heart" color={c.error} />
                     <View style={{ width: 10 }} />
-                    <StatCard value={resumen?.outfits_planificados} label="Planificados" icon="📅" color={c.warning} />
+                    <StatCard value={resumen?.outfits_planificados} label="Planificados" icon="calendar-outline" color={c.warning} />
                 </View>
 
                 {/* Outfit del día */}
@@ -272,7 +286,7 @@ const HomeScreen = ({ navigation }) => {
                     {todayEntry?.outfit ? (
                         <View style={styles.todayRow}>
                             <View style={[styles.todayIcon, { backgroundColor: c.primaryLight + '30' }]}>
-                                <Text style={{ fontSize: 28 }}>👔</Text>
+                                <Ionicons name="albums-outline" size={28} color={c.primary} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text style={[styles.todayName, { color: c.text }]}>{todayEntry.outfit.nombre}</Text>
@@ -289,7 +303,7 @@ const HomeScreen = ({ navigation }) => {
                         </View>
                     ) : (
                         <View style={styles.todayRow}>
-                            <Text style={{ fontSize: 28 }}>📅</Text>
+                            <Ionicons name="calendar-outline" size={28} color={c.textSecondary} />
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text style={[styles.noOutfitText, { color: c.textSecondary }]}>Sin outfit planificado hoy</Text>
                                 <TouchableOpacity onPress={() => navigation.navigate('Calendario')}>
@@ -319,7 +333,7 @@ const HomeScreen = ({ navigation }) => {
                                     <Image source={{ uri: `${IMAGE_BASE_URL}${item.image_url}` }} style={styles.garmentImg} />
                                 ) : (
                                     <View style={[styles.garmentImg, { backgroundColor: c.surfaceVariant, justifyContent: 'center', alignItems: 'center' }]}>
-                                        <Text style={{ fontSize: 24 }}>👕</Text>
+                                        <Ionicons name="shirt-outline" size={24} color={c.textMuted} />
                                     </View>
                                 )}
                                 <Text style={[styles.garmentName, { color: c.text }]} numberOfLines={1}>{item.name}</Text>
@@ -338,12 +352,12 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={[styles.sectionTitle, { color: c.text }]}>Accesos rápidos</Text>
                 <View style={styles.quickRow}>
                     <Card style={{ flex: 1 }} padding={14} onPress={() => navigation.navigate('Stats')}>
-                        <Text style={{ fontSize: 24, textAlign: 'center' }}>📊</Text>
+                        <Ionicons name="bar-chart-outline" size={24} color={c.primary} style={{ textAlign: 'center' }} />
                         <Text style={[styles.quickLabel, { color: c.text }]}>Estadísticas</Text>
                     </Card>
                     <View style={{ width: 12 }} />
                     <Card style={{ flex: 1 }} padding={14} onPress={() => navigation.navigate('Outfits', { screen: 'CreateOutfit' })}>
-                        <Text style={{ fontSize: 24, textAlign: 'center' }}>✨</Text>
+                        <Ionicons name="sparkles-outline" size={24} color={c.primary} style={{ textAlign: 'center' }} />
                         <Text style={[styles.quickLabel, { color: c.text }]}>Nuevo outfit</Text>
                     </Card>
                 </View>
@@ -402,7 +416,7 @@ const HomeScreen = ({ navigation }) => {
                                             onPress={() => selectCity(item)}
                                             activeOpacity={0.7}
                                         >
-                                            <Text style={{ fontSize: 16, marginRight: 10 }}>📍</Text>
+                                            <Ionicons name="location" size={16} color={c.primary} style={{ marginRight: 10 }} />
                                             <View style={{ flex: 1 }}>
                                                 <Text style={[styles.suggestionName, { color: c.text }]} numberOfLines={1}>
                                                     {item.name}
@@ -455,7 +469,7 @@ const styles = StyleSheet.create({
     weatherRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     weatherTemp: { fontSize: 36, fontWeight: '700', color: '#FFF', letterSpacing: -1 },
     weatherDesc: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 2, textTransform: 'capitalize' },
-    weatherEmoji: { fontSize: 48 },
+    weatherEmoji: { },
     cityRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 },
     cityText: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
 

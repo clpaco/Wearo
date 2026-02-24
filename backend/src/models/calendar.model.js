@@ -1,6 +1,10 @@
 // Modelo de Calendario — planificación de outfits por día
 const { query } = require('../config/db');
 
+// Auto-migration: agregar columna worn si no existe
+query('ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS worn BOOLEAN DEFAULT false')
+    .catch(() => { /* columna ya existe o error menor, ignorar */ });
+
 // Asignar o actualizar un outfit para una fecha (upsert)
 const upsert = async (userId, entryData) => {
     const { date, outfitId, notes, weatherTemp, weatherDesc, weatherIcon } = entryData;
@@ -72,4 +76,13 @@ const remove = async (userId, date) => {
     return result.rows[0] || null;
 };
 
-module.exports = { upsert, findByRange, findByDate, remove };
+// Marcar entrada como usada
+const setWorn = async (userId, date) => {
+    const result = await query(
+        'UPDATE calendar_entries SET worn = true WHERE user_id = $1 AND date = $2 RETURNING *',
+        [userId, date]
+    );
+    return result.rows[0] || null;
+};
+
+module.exports = { upsert, findByRange, findByDate, remove, setWorn };

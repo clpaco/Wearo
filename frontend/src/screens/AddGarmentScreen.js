@@ -5,13 +5,14 @@ import {
     StyleSheet, ScrollView, Alert, ActivityIndicator, StatusBar,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { addGarment, editGarment } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
 import ScreenHeader from '../components/ScreenHeader';
 
 const CATEGORIES = [
-    'camisetas', 'pantalones', 'zapatos', 'chaquetas',
+    'camisetas', 'pantalones', 'zapatos', 'chaquetas', 'sudaderas',
     'accesorios', 'vestidos', 'otro',
 ];
 
@@ -44,6 +45,8 @@ const AddGarmentScreen = ({ navigation, route }) => {
     const [notes, setNotes] = useState(existing?.notes || '');
     const [imageUri, setImageUri] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showCustomInput, setShowCustomInput] = useState(false);
+    const [customCategory, setCustomCategory] = useState('');
 
     const dispatch = useDispatch();
     const { theme } = useTheme();
@@ -88,6 +91,16 @@ const AddGarmentScreen = ({ navigation, route }) => {
         }
     };
 
+    // Confirmar categoría personalizada
+    const handleCustomCategorySubmit = () => {
+        const trimmed = customCategory.trim().toLowerCase();
+        if (trimmed) {
+            setCategory(trimmed);
+            setShowCustomInput(false);
+            setCustomCategory('');
+        }
+    };
+
     // Guardar prenda
     const handleSubmit = async () => {
         if (!name.trim()) {
@@ -119,6 +132,9 @@ const AddGarmentScreen = ({ navigation, route }) => {
         }
     };
 
+    // Determinar si la categoría actual es personalizada (no está en CATEGORIES)
+    const isCustomCategory = category && !CATEGORIES.includes(category);
+
     return (
         <View style={[styles.container, { backgroundColor: c.background }]}>
             <StatusBar barStyle={c.statusBar} />
@@ -140,7 +156,7 @@ const AddGarmentScreen = ({ navigation, route }) => {
                         />
                     ) : (
                         <View style={[styles.imagePlaceholder, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
-                            <Text style={{ fontSize: 48 }}>📷</Text>
+                            <Ionicons name="camera-outline" size={48} color={c.textMuted} />
                             <Text style={[styles.placeholderText, { color: c.textMuted }]}>
                                 Añadir foto
                             </Text>
@@ -151,13 +167,13 @@ const AddGarmentScreen = ({ navigation, route }) => {
                             style={[styles.imgBtn, { backgroundColor: c.primary }]}
                             onPress={takePhoto}
                         >
-                            <Text style={styles.imgBtnText}>📸 Cámara</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="camera" size={16} color="#FFF" /><Text style={styles.imgBtnText}>Cámara</Text></View>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.imgBtn, { backgroundColor: c.accent }]}
                             onPress={pickImage}
                         >
-                            <Text style={styles.imgBtnText}>🖼️ Galería</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="image-outline" size={16} color="#FFF" /><Text style={styles.imgBtnText}>Galería</Text></View>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -188,7 +204,11 @@ const AddGarmentScreen = ({ navigation, route }) => {
                                         borderColor: category === cat ? c.primary : c.border,
                                     },
                                 ]}
-                                onPress={() => setCategory(cat)}
+                                onPress={() => {
+                                    setCategory(cat);
+                                    setShowCustomInput(false);
+                                    setCustomCategory('');
+                                }}
                             >
                                 <Text style={[
                                     styles.chipText,
@@ -198,6 +218,62 @@ const AddGarmentScreen = ({ navigation, route }) => {
                                 </Text>
                             </TouchableOpacity>
                         ))}
+
+                        {/* Chip de categoría personalizada activa */}
+                        {isCustomCategory && !showCustomInput && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.chip,
+                                    { backgroundColor: c.primary, borderColor: c.primary },
+                                ]}
+                                onPress={() => {}}
+                            >
+                                <Text style={[styles.chipText, { color: '#FFF' }]}>
+                                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Botón + Crear */}
+                        {!showCustomInput && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.chip,
+                                    { backgroundColor: c.surface, borderColor: c.border, borderStyle: 'dashed' },
+                                ]}
+                                onPress={() => setShowCustomInput(true)}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="add" size={16} color={c.primary} />
+                                    <Text style={[styles.chipText, { color: c.primary }]}>Crear</Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Input inline para categoría personalizada */}
+                        {showCustomInput && (
+                            <View style={[styles.customCategoryRow, { backgroundColor: c.inputBg, borderColor: c.primary }]}>
+                                <TextInput
+                                    style={[styles.customCategoryInput, { color: c.inputText }]}
+                                    placeholder="Nueva categoría..."
+                                    placeholderTextColor={c.placeholder}
+                                    value={customCategory}
+                                    onChangeText={setCustomCategory}
+                                    autoFocus
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleCustomCategorySubmit}
+                                />
+                                <TouchableOpacity onPress={handleCustomCategorySubmit} style={styles.customCategoryConfirm}>
+                                    <Ionicons name="checkmark-circle" size={24} color={c.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => { setShowCustomInput(false); setCustomCategory(''); }}
+                                    style={styles.customCategoryCancel}
+                                >
+                                    <Ionicons name="close-circle" size={24} color={c.textMuted} />
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -327,6 +403,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1,
     },
     chipText: { fontSize: 14, fontWeight: '600' },
+    customCategoryRow: {
+        flexDirection: 'row', alignItems: 'center', borderWidth: 1.5,
+        borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, gap: 6,
+        width: '100%',
+    },
+    customCategoryInput: {
+        flex: 1, fontSize: 14, fontWeight: '600', paddingVertical: 4,
+    },
+    customCategoryConfirm: { padding: 2 },
+    customCategoryCancel: { padding: 2 },
     colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     colorCircle: {
         width: 36, height: 36, borderRadius: 18, borderWidth: 3,

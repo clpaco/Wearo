@@ -1,23 +1,28 @@
-// Pantalla Social — feed público de outfits con likes y compartir
+// Pantalla Social — feed público de outfits con likes y compartir (Instagram-style)
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, Modal, TextInput, Image,
     StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
-    KeyboardAvoidingView, Platform,
+    KeyboardAvoidingView, Platform, Alert, Dimensions, Animated,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchFeed, toggleLike, shareOutfit, resetFeed, fetchComments, addComment, removeComment } from '../store/socialSlice';
+import { fetchFeed, toggleLike, shareOutfit, unshareOutfit, resetFeed, fetchComments, addComment, removeComment } from '../store/socialSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GARMENT_SIZE = Math.floor((SCREEN_WIDTH - 6) / 3);
 
 const SocialScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { feed, hasMore, isLoading, isRefreshing, comments, commentsLoading } = useSelector((state) => state.social);
     const { outfits } = useSelector((state) => state.outfits);
     const { user } = useSelector((state) => state.auth);
+    const currentUserId = useSelector((s) => s.auth.user?.id);
     const { theme } = useTheme();
     const c = theme.colors;
 
@@ -30,6 +35,14 @@ const SocialScreen = ({ navigation }) => {
     const [showComments, setShowComments] = useState(false);
     const [commentInput, setCommentInput] = useState('');
     const commentInputRef = useRef(null);
+    const likeAnims = useRef({});
+
+    const getLikeAnim = (postId) => {
+        if (!likeAnims.current[postId]) {
+            likeAnims.current[postId] = new Animated.Value(1);
+        }
+        return likeAnims.current[postId];
+    };
 
     const openComments = (postId) => {
         setCommentsPostId(postId);
@@ -76,7 +89,23 @@ const SocialScreen = ({ navigation }) => {
     };
 
     const handleLike = (post) => {
+        const anim = getLikeAnim(post.id);
+        Animated.sequence([
+            Animated.spring(anim, { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 12 }),
+            Animated.spring(anim, { toValue: 1.0, useNativeDriver: true, speed: 50, bounciness: 12 }),
+        ]).start();
         dispatch(toggleLike({ sharedId: post.id, isLiked: post.liked_by_me }));
+    };
+
+    const handleDeletePost = (post) => {
+        Alert.alert(
+            'Eliminar publicación',
+            '¿Seguro que quieres retirar este outfit del feed?',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(unshareOutfit(post.id)) },
+            ]
+        );
     };
 
     const openShareModal = () => {
@@ -94,49 +123,59 @@ const SocialScreen = ({ navigation }) => {
         setSelectedOutfitId(null);
     };
 
+    // Find current post for comments modal (F2)
+    const commentsPost = commentsPostId ? feed.find((p) => p.id === commentsPostId) : null;
+
     const renderPost = ({ item: post }) => {
         const author = post.author || {};
         const outfit = post.outfit || {};
         const garments = post.garments || [];
-        const isMe = author.id === user?.id;
+        const isMe = post.user_id === currentUserId || author.id === currentUserId;
 
         return (
-            <View style={[styles.postCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-                {/* Cabecera del post — toca para ir al perfil */}
-                <TouchableOpacity
-                    style={styles.postHeader}
-                    onPress={() => navigation.navigate('UserProfile', { userId: author.id })}
-                    activeOpacity={0.7}
-                >
-                    <View style={[styles.avatar, { backgroundColor: c.primary + '20' }]}>
-                        {author.avatarUrl ? (
-                            <Image source={{ uri: `${IMAGE_BASE_URL}${author.avatarUrl}` }} style={styles.avatarImg} />
-                        ) : (
-                            <Text style={[styles.avatarText, { color: c.primary }]}>
-                                {(author.fullName || '?')[0].toUpperCase()}
+            <View style={[styles.postCard, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+                {/* F1: Instagram-style header — avatar + name + "..." menu */}
+                <View style={styles.postHeader}>
+                    <TouchableOpacity
+                        style={styles.postHeaderUser}
+                        onPress={() => navigation.navigate('UserProfile', { userId: author.id })}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.avatar, { backgroundColor: c.primary + '20' }]}>
+                            {author.avatarUrl ? (
+                                <Image source={{ uri: `${IMAGE_BASE_URL}${author.avatarUrl}` }} style={styles.avatarImg} />
+                            ) : (
+                                <Text style={[styles.avatarText, { color: c.primary }]}>
+                                    {(author.fullName || '?')[0].toUpperCase()}
+                                </Text>
+                            )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.authorName, { color: c.text }]}>
+                                {author.fullName || 'Usuario'}
                             </Text>
-                        )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.authorName, { color: c.text }]}>
-                            {author.fullName || 'Usuario'} {isMe && '(tú)'}
-                        </Text>
-                        <Text style={[styles.timeAgo, { color: c.textMuted }]}>
-                            {getTimeAgo(post.created_at)}
-                        </Text>
-                    </View>
-                </TouchableOpacity>
+                            <Text style={[styles.timeAgo, { color: c.textMuted }]}>
+                                {getTimeAgo(post.created_at)}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                    {isMe && (
+                        <TouchableOpacity
+                            onPress={() => handleDeletePost(post)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            style={styles.menuBtn}
+                        >
+                            <Ionicons name="ellipsis-horizontal" size={22} color={c.textMuted} />
+                        </TouchableOpacity>
+                    )}
+                </View>
 
-                {/* Caption */}
-                {post.caption ? (
-                    <Text style={[styles.caption, { color: c.text }]}>{post.caption}</Text>
-                ) : null}
-
-                {/* Outfit info */}
+                {/* Outfit info bar */}
                 <View style={[styles.outfitBox, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
-                    <Text style={[styles.outfitName, { color: c.text }]}>
-                        👔 {outfit.name || 'Outfit'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Ionicons name="albums-outline" size={16} color={c.text} style={{ marginRight: 6 }} />
+                        <Text style={[styles.outfitName, { color: c.text }]}>{outfit.name || 'Outfit'}</Text>
+                    </View>
                     {outfit.occasion && (
                         <View style={[styles.occasionBadge, { backgroundColor: c.primary + '15' }]}>
                             <Text style={[styles.occasionText, { color: c.primary }]}>{outfit.occasion}</Text>
@@ -144,16 +183,16 @@ const SocialScreen = ({ navigation }) => {
                     )}
                 </View>
 
-                {/* Mosaico de prendas */}
+                {/* F1: Larger garment mosaic — Instagram-style grid */}
                 {garments.length > 0 && (
                     <View style={styles.garmentGrid}>
-                        {garments.slice(0, 4).map((g, idx) => (
+                        {garments.slice(0, 6).map((g, idx) => (
                             <View key={g.id || idx} style={[styles.garmentThumb, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
                                 {g.image_url ? (
-                                    <Image source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }} style={styles.garmentImg} />
+                                    <Image source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }} style={styles.garmentImg} resizeMode="cover" />
                                 ) : (
                                     <View style={styles.garmentPlaceholder}>
-                                        <Text style={{ fontSize: 18 }}>👕</Text>
+                                        <Ionicons name="shirt-outline" size={28} color={c.textMuted} />
                                         <Text style={[styles.garmentMiniName, { color: c.textMuted }]} numberOfLines={1}>
                                             {g.name}
                                         </Text>
@@ -161,33 +200,26 @@ const SocialScreen = ({ navigation }) => {
                                 )}
                             </View>
                         ))}
-                        {garments.length > 4 && (
+                        {garments.length > 6 && (
                             <View style={[styles.garmentThumb, styles.moreOverlay, { backgroundColor: c.surfaceVariant }]}>
-                                <Text style={[styles.moreText, { color: c.textSecondary }]}>+{garments.length - 4}</Text>
+                                <Text style={[styles.moreText, { color: c.textSecondary }]}>+{garments.length - 6}</Text>
                             </View>
                         )}
                     </View>
                 )}
 
-                {/* Barra de acciones */}
-                <View style={[styles.actionsBar, { borderTopColor: c.border }]}>
+                {/* F1: Instagram-style action bar — icons only */}
+                <View style={styles.actionsBar}>
                     <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(post)} activeOpacity={0.6}>
-                        <Text style={{ fontSize: 20 }}>{post.liked_by_me ? '❤️' : '🤍'}</Text>
-                        <Text style={[styles.actionCount, { color: post.liked_by_me ? c.error : c.textMuted }]}>
-                            {post.like_count || 0}
-                        </Text>
+                        <Animated.View style={{ transform: [{ scale: getLikeAnim(post.id) }] }}>
+                            <Ionicons name={post.liked_by_me ? 'heart' : 'heart-outline'} size={26} color={post.liked_by_me ? c.error : c.text} />
+                        </Animated.View>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionBtn} onPress={() => openComments(post.id)} activeOpacity={0.6}>
-                        <Text style={{ fontSize: 18 }}>💬</Text>
-                        <Text style={[styles.actionCount, { color: c.textMuted }]}>
-                            {post.comment_count || 0}
-                        </Text>
+                        <Ionicons name="chatbubble-outline" size={23} color={c.text} />
                     </TouchableOpacity>
                     <View style={styles.actionBtn}>
-                        <Text style={{ fontSize: 16 }}>👁️</Text>
-                        <Text style={[styles.actionLabel, { color: c.textMuted }]}>
-                            {garments.length} prenda{garments.length !== 1 ? 's' : ''}
-                        </Text>
+                        <Ionicons name="shirt-outline" size={21} color={c.text} />
                     </View>
                     {outfit.season && (
                         <View style={[styles.seasonTag, { backgroundColor: c.accent + '15' }]}>
@@ -195,6 +227,37 @@ const SocialScreen = ({ navigation }) => {
                         </View>
                     )}
                 </View>
+
+                {/* F1: Counts row below icons, like Instagram */}
+                <View style={styles.countsRow}>
+                    {(post.like_count || 0) > 0 && (
+                        <Text style={[styles.likesCount, { color: c.text }]}>
+                            {post.like_count} Me gusta
+                        </Text>
+                    )}
+                </View>
+
+                {/* Caption below actions, Instagram-style: bold author + caption */}
+                {post.caption ? (
+                    <View style={styles.captionRow}>
+                        <Text style={[styles.captionAuthor, { color: c.text }]}>{author.fullName || 'Usuario'}</Text>
+                        <Text style={[styles.captionText, { color: c.text }]}>{' '}{post.caption}</Text>
+                    </View>
+                ) : null}
+
+                {/* "View comments" link */}
+                {(post.comment_count || 0) > 0 && (
+                    <TouchableOpacity onPress={() => openComments(post.id)} style={styles.viewCommentsBtn}>
+                        <Text style={[styles.viewCommentsText, { color: c.textMuted }]}>
+                            Ver {post.comment_count} comentario{post.comment_count !== 1 ? 's' : ''}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* Garment count */}
+                <Text style={[styles.garmentCountText, { color: c.textMuted }]}>
+                    {garments.length} prenda{garments.length !== 1 ? 's' : ''}
+                </Text>
             </View>
         );
     };
@@ -212,7 +275,7 @@ const SocialScreen = ({ navigation }) => {
                             onPress={() => navigation.navigate('UserProfile', { userId: user?.id })}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                            <Text style={{ fontSize: 20 }}>👤</Text>
+                            <Ionicons name="person-outline" size={22} color={c.text} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={openShareModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                             <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>+ Compartir</Text>
@@ -241,7 +304,7 @@ const SocialScreen = ({ navigation }) => {
                 ListEmptyComponent={
                     !isLoading ? (
                         <EmptyState
-                            icon="🌐"
+                            icon="globe-outline"
                             title="Feed vacío"
                             description="Sé el primero en compartir un outfit con la comunidad."
                             action={{ label: 'Compartir un Outfit', onPress: openShareModal }}
@@ -250,7 +313,7 @@ const SocialScreen = ({ navigation }) => {
                 }
             />
 
-            {/* Modal: Comentarios */}
+            {/* Modal: Comentarios (F2 enhancements) */}
             <Modal visible={showComments} animationType="slide" transparent onRequestClose={() => setShowComments(false)}>
                 <KeyboardAvoidingView
                     style={styles.modalOverlay}
@@ -261,9 +324,39 @@ const SocialScreen = ({ navigation }) => {
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: c.text }]}>Comentarios</Text>
                             <TouchableOpacity onPress={() => setShowComments(false)}>
-                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                                <Ionicons name="close" size={22} color={c.primary} />
                             </TouchableOpacity>
                         </View>
+
+                        {/* F2: Post info at top of comments modal */}
+                        {commentsPost && (
+                            <View style={[styles.commentsPostInfo, { borderBottomColor: c.border }]}>
+                                <View style={styles.commentsPostHeader}>
+                                    <View style={[styles.commentAvatar, { backgroundColor: c.primary + '20' }]}>
+                                        {commentsPost.author?.avatarUrl ? (
+                                            <Image source={{ uri: `${IMAGE_BASE_URL}${commentsPost.author.avatarUrl}` }} style={styles.commentAvatarImg} />
+                                        ) : (
+                                            <Text style={[styles.commentAvatarText, { color: c.primary }]}>
+                                                {(commentsPost.author?.fullName || '?')[0].toUpperCase()}
+                                            </Text>
+                                        )}
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.commentAuthor, { color: c.text }]}>
+                                            {commentsPost.author?.fullName || 'Usuario'}
+                                        </Text>
+                                        <Text style={[styles.commentsOutfitName, { color: c.primary }]}>
+                                            {commentsPost.outfit?.name || 'Outfit'}
+                                        </Text>
+                                    </View>
+                                </View>
+                                {commentsPost.caption ? (
+                                    <Text style={[styles.commentsCaption, { color: c.textSecondary }]}>
+                                        {commentsPost.caption}
+                                    </Text>
+                                ) : null}
+                            </View>
+                        )}
 
                         {/* Lista de comentarios */}
                         {commentsLoading ? (
@@ -311,7 +404,7 @@ const SocialScreen = ({ navigation }) => {
                                                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                                     style={{ marginLeft: 8 }}
                                                 >
-                                                    <Text style={{ fontSize: 14 }}>🗑️</Text>
+                                                    <Ionicons name="trash-outline" size={16} color={c.error} />
                                                 </TouchableOpacity>
                                             )}
                                         </View>
@@ -325,7 +418,7 @@ const SocialScreen = ({ navigation }) => {
                             <TextInput
                                 ref={commentInputRef}
                                 style={[styles.commentInput, { color: c.text, backgroundColor: c.surfaceVariant, borderColor: c.border }]}
-                                placeholder="Escribe un comentario…"
+                                placeholder="Escribe un comentario..."
                                 placeholderTextColor={c.textMuted}
                                 value={commentInput}
                                 onChangeText={setCommentInput}
@@ -339,42 +432,30 @@ const SocialScreen = ({ navigation }) => {
                                 disabled={!commentInput.trim()}
                                 activeOpacity={0.8}
                             >
-                                <Text style={{ color: '#FFF', fontSize: 15 }}>↑</Text>
+                                <Ionicons name="arrow-up" size={18} color="#FFF" />
                             </TouchableOpacity>
                         </View>
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Modal: Compartir outfit */}
+            {/* Modal: Compartir outfit (F3 enhancements) */}
             <Modal visible={showShareModal} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: c.surface }]}>
                         <View style={styles.modalHeader}>
                             <Text style={[styles.modalTitle, { color: c.text }]}>Compartir Outfit</Text>
                             <TouchableOpacity onPress={() => setShowShareModal(false)}>
-                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                                <Ionicons name="close" size={22} color={c.primary} />
                             </TouchableOpacity>
                         </View>
 
-                        {/* Input de caption */}
-                        <TextInput
-                            style={[styles.captionInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText }]}
-                            placeholder="Escribe un comentario..."
-                            placeholderTextColor={c.placeholder}
-                            value={caption}
-                            onChangeText={setCaption}
-                            multiline
-                            maxLength={280}
-                        />
-                        <Text style={[styles.charCount, { color: c.textMuted }]}>{caption.length}/280</Text>
-
-                        {/* Lista de outfits para seleccionar */}
+                        {/* F3: Select outfit first */}
                         <Text style={[styles.selectLabel, { color: c.textSecondary }]}>Selecciona un outfit:</Text>
                         <FlatList
                             data={outfits}
                             keyExtractor={(item) => item.id.toString()}
-                            style={{ maxHeight: 280 }}
+                            style={{ maxHeight: 220 }}
                             renderItem={({ item }) => {
                                 const isSelected = selectedOutfitId === item.id;
                                 return (
@@ -386,9 +467,7 @@ const SocialScreen = ({ navigation }) => {
                                         ]}
                                         onPress={() => setSelectedOutfitId(item.id)}
                                     >
-                                        <Text style={{ fontSize: 20, marginRight: 10 }}>
-                                            {isSelected ? '✅' : '👔'}
-                                        </Text>
+                                        <Ionicons name={isSelected ? 'checkmark-circle' : 'albums-outline'} size={22} color={isSelected ? c.primary : c.textMuted} style={{ marginRight: 10 }} />
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
                                             <Text style={[styles.optionMeta, { color: c.textMuted }]}>
@@ -405,7 +484,20 @@ const SocialScreen = ({ navigation }) => {
                             }
                         />
 
-                        {/* Botón compartir */}
+                        {/* F3: Caption TextInput before the share button */}
+                        <Text style={[styles.selectLabel, { color: c.textSecondary, marginTop: 12 }]}>Escribe un mensaje (opcional):</Text>
+                        <TextInput
+                            style={[styles.captionInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText }]}
+                            placeholder="¿Qué quieres decir sobre este outfit?"
+                            placeholderTextColor={c.placeholder}
+                            value={caption}
+                            onChangeText={setCaption}
+                            multiline
+                            maxLength={280}
+                        />
+                        <Text style={[styles.charCount, { color: c.textMuted }]}>{caption.length}/280</Text>
+
+                        {/* Botón compartir — dispatch includes caption */}
                         <TouchableOpacity
                             style={[
                                 styles.shareBtn,
@@ -416,7 +508,12 @@ const SocialScreen = ({ navigation }) => {
                             activeOpacity={0.7}
                         >
                             <Text style={styles.shareBtnText}>
-                                {selectedOutfitId ? '🚀 Compartir al Feed' : 'Selecciona un outfit'}
+                                {selectedOutfitId ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="paper-plane-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                                        <Text style={styles.shareBtnText}>Compartir al Feed</Text>
+                                    </View>
+                                ) : 'Selecciona un outfit'}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -428,58 +525,96 @@ const SocialScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    feedContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
+    feedContent: { paddingTop: 8, paddingBottom: 32 },
 
+    // Instagram-style card: flat, no border radius, divider at bottom
     postCard: {
-        borderRadius: 18, borderWidth: 1, marginBottom: 16, overflow: 'hidden',
+        borderRadius: 0, borderWidth: 0, borderBottomWidth: 0.5, marginBottom: 4,
     },
+    // Header row: avatar + name on left, "..." on right
     postHeader: {
-        flexDirection: 'row', alignItems: 'center', padding: 14, paddingBottom: 8,
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10,
+    },
+    postHeaderUser: {
+        flexDirection: 'row', alignItems: 'center', flex: 1,
     },
     avatar: {
-        width: 42, height: 42, borderRadius: 21,
-        justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden',
+        width: 38, height: 38, borderRadius: 19,
+        justifyContent: 'center', alignItems: 'center', marginRight: 10, overflow: 'hidden',
     },
-    avatarImg: { width: 42, height: 42, borderRadius: 21 },
-    avatarText: { fontSize: 18, fontWeight: '800' },
-    authorName: { fontSize: 15, fontWeight: '700' },
+    avatarImg: { width: 38, height: 38, borderRadius: 19 },
+    avatarText: { fontSize: 16, fontWeight: '800' },
+    authorName: { fontSize: 14, fontWeight: '700' },
     timeAgo: { fontSize: 12, marginTop: 1 },
-    caption: { fontSize: 15, lineHeight: 21, paddingHorizontal: 14, marginBottom: 10 },
+    menuBtn: { padding: 6 },
 
+    // Outfit info
     outfitBox: {
-        marginHorizontal: 14, borderRadius: 12, padding: 12, borderWidth: 1,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        marginHorizontal: 14, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4,
     },
-    outfitName: { fontSize: 16, fontWeight: '700', flex: 1 },
-    occasionBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-    occasionText: { fontSize: 12, fontWeight: '600' },
+    outfitName: { fontSize: 14, fontWeight: '700', flex: 1 },
+    occasionBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+    occasionText: { fontSize: 11, fontWeight: '600' },
 
+    // Larger garment grid — 3 columns, fills width
     garmentGrid: {
-        flexDirection: 'row', flexWrap: 'wrap', padding: 10, gap: 6,
+        flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 1, paddingVertical: 2, gap: 2,
     },
     garmentThumb: {
-        width: 72, height: 72, borderRadius: 10, borderWidth: 1, overflow: 'hidden',
+        width: GARMENT_SIZE, height: GARMENT_SIZE, borderRadius: 2, borderWidth: 0.5, overflow: 'hidden',
     },
     garmentImg: { width: '100%', height: '100%' },
-    garmentPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 4 },
-    garmentMiniName: { fontSize: 9, textAlign: 'center', marginTop: 2 },
+    garmentPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 6 },
+    garmentMiniName: { fontSize: 10, textAlign: 'center', marginTop: 3 },
     moreOverlay: { justifyContent: 'center', alignItems: 'center' },
-    moreText: { fontSize: 16, fontWeight: '700' },
+    moreText: { fontSize: 18, fontWeight: '700' },
 
+    // Instagram-style actions bar — icons only, horizontal
     actionsBar: {
-        flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: 0.5, gap: 16,
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 2, gap: 16,
     },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    actionBtn: { padding: 2 },
     actionCount: { fontSize: 14, fontWeight: '700' },
     actionLabel: { fontSize: 13 },
+
+    // Counts row below icons
+    countsRow: {
+        paddingHorizontal: 14, paddingTop: 4,
+    },
+    likesCount: { fontSize: 14, fontWeight: '700' },
+
+    // Caption row: bold author + caption text
+    captionRow: {
+        flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, paddingTop: 4,
+    },
+    captionAuthor: { fontSize: 14, fontWeight: '700' },
+    captionText: { fontSize: 14, lineHeight: 20, flexShrink: 1 },
+
+    // View comments link
+    viewCommentsBtn: { paddingHorizontal: 14, paddingTop: 4 },
+    viewCommentsText: { fontSize: 14 },
+
+    // Garment count text
+    garmentCountText: { fontSize: 13, paddingHorizontal: 14, paddingTop: 2, paddingBottom: 12 },
+
     seasonTag: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
     seasonTagText: { fontSize: 12, fontWeight: '600' },
 
+    // Modals
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', padding: 20 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     modalTitle: { fontSize: 20, fontWeight: '700' },
     modalClose: { fontSize: 22, fontWeight: '700' },
+
+    // F2: Comments modal post info
+    commentsPostInfo: { borderBottomWidth: 1, paddingBottom: 12, marginBottom: 8 },
+    commentsPostHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+    commentsOutfitName: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+    commentsCaption: { fontSize: 14, lineHeight: 19, marginLeft: 44 },
+
+    // Share modal
     captionInput: {
         borderRadius: 12, borderWidth: 1, padding: 14, fontSize: 15,
         minHeight: 60, textAlignVertical: 'top', marginBottom: 4,

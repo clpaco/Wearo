@@ -131,7 +131,8 @@ const markWorn = async (req, res) => {
                 if (g.id) await garmentModel.incrementWorn(userId, g.id);
             }
         }
-        res.json({ mensaje: 'Outfit marcado como usado', outfit_id: entry.outfit_id });
+        await calendarModel.setWorn(userId, date);
+        res.json({ mensaje: 'Outfit marcado como usado', outfit_id: entry.outfit_id, worn: true });
     } catch (err) {
         console.error('Error marcando como usado:', err);
         res.status(500).json({ error: true, mensaje: 'Error al marcar como usado' });

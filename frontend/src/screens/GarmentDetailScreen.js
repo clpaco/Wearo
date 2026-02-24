@@ -7,6 +7,7 @@ import {
 import { useDispatch } from 'react-redux';
 import { removeGarment } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import { IMAGE_BASE_URL } from '../services/api';
 
 const GarmentDetailScreen = ({ navigation, route }) => {
@@ -57,7 +58,7 @@ const GarmentDetailScreen = ({ navigation, route }) => {
                     />
                 ) : (
                     <View style={[styles.heroPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                        <Text style={{ fontSize: 80 }}>👕</Text>
+                        <Ionicons name="shirt-outline" size={80} color={c.textMuted} />
                     </View>
                 )}
 
@@ -73,7 +74,7 @@ const GarmentDetailScreen = ({ navigation, route }) => {
                 <View style={[styles.detailsCard, { backgroundColor: c.surface, borderColor: c.border }]}>
                     <View style={styles.titleRow}>
                         <Text style={[styles.name, { color: c.text }]}>{garment.name}</Text>
-                        {garment.is_favorite && <Text style={{ fontSize: 24 }}>❤️</Text>}
+                        {garment.is_favorite && <Ionicons name="heart" size={24} color={c.error || '#E17055'} />}
                     </View>
                     <Text style={[styles.category, { color: c.primary }]}>
                         {garment.category?.charAt(0).toUpperCase() + garment.category?.slice(1)}
@@ -93,13 +94,19 @@ const GarmentDetailScreen = ({ navigation, route }) => {
                             style={[styles.editBtn, { backgroundColor: c.primary }]}
                             onPress={() => navigation.navigate('AddGarment', { garment })}
                         >
-                            <Text style={styles.editBtnText}>✏️ Editar</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="create-outline" size={16} color="#FFF" />
+                                <Text style={styles.editBtnText}>Editar</Text>
+                            </View>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.deleteBtn, { borderColor: c.error }]}
                             onPress={handleDelete}
                         >
-                            <Text style={[styles.deleteBtnText, { color: c.error }]}>🗑️ Eliminar</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="trash-outline" size={16} color={c.error} />
+                                <Text style={[styles.deleteBtnText, { color: c.error }]}>Eliminar</Text>
+                            </View>
                         </TouchableOpacity>
                     </View>
                 </View>

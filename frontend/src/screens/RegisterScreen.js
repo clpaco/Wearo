@@ -1,11 +1,12 @@
 // Pantalla de Registro — diseño moderno con soporte claro/oscuro
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity,
     StyleSheet, KeyboardAvoidingView, Platform,
-    ActivityIndicator, ScrollView, StatusBar,
+    ActivityIndicator, ScrollView, StatusBar, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { registerUser, clearError } from '../store/authSlice';
 import { useTheme } from '../hooks/useTheme';
@@ -16,11 +17,16 @@ const RegisterScreen = ({ navigation }) => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [localError, setLocalError] = useState('');
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const dispatch = useDispatch();
     const { isLoading, error } = useSelector((state) => state.auth);
     const { theme } = useTheme();
     const c = theme.colors;
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+    }, []);
 
     const handleRegister = () => {
         setLocalError('');
@@ -62,8 +68,11 @@ const RegisterScreen = ({ navigation }) => {
                 keyboardShouldPersistTaps="handled"
             >
                 {/* Header */}
+                <Animated.View style={{ opacity: fadeAnim }}>
                 <View style={styles.header}>
-                    <Text style={[styles.logo, { color: c.primary }]}>🧥</Text>
+                    <View style={[styles.logoCircle, { backgroundColor: c.primary + '20' }]}>
+                        <Ionicons name="shirt-outline" size={36} color={c.primary} />
+                    </View>
                     <Text style={[styles.title, { color: c.text }]}>Crear Cuenta</Text>
                     <Text style={[styles.subtitle, { color: c.textSecondary }]}>
                         Empieza a organizar tu armario
@@ -80,62 +89,66 @@ const RegisterScreen = ({ navigation }) => {
 
                     <View style={styles.inputGroup}>
                         <Text style={[styles.label, { color: c.textSecondary }]}>Nombre completo</Text>
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText,
-                            }]}
-                            placeholder="Tu nombre"
-                            placeholderTextColor={c.placeholder}
-                            value={fullName}
-                            onChangeText={(text) => { setFullName(text); setLocalError(''); dispatch(clearError()); }}
-                            autoCapitalize="words"
-                        />
+                        <View style={[styles.inputRow, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}>
+                            <Ionicons name="person-outline" size={18} color={c.textMuted} style={styles.inputIcon} />
+                            <TextInput
+                                style={[styles.input, { color: c.inputText }]}
+                                placeholder="Tu nombre"
+                                placeholderTextColor={c.placeholder}
+                                value={fullName}
+                                onChangeText={(text) => { setFullName(text); setLocalError(''); dispatch(clearError()); }}
+                                autoCapitalize="words"
+                            />
+                        </View>
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={[styles.label, { color: c.textSecondary }]}>Email</Text>
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText,
-                            }]}
-                            placeholder="tu@email.com"
-                            placeholderTextColor={c.placeholder}
-                            value={email}
-                            onChangeText={(text) => { setEmail(text); setLocalError(''); dispatch(clearError()); }}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
+                        <View style={[styles.inputRow, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}>
+                            <Ionicons name="mail-outline" size={18} color={c.textMuted} style={styles.inputIcon} />
+                            <TextInput
+                                style={[styles.input, { color: c.inputText }]}
+                                placeholder="tu@email.com"
+                                placeholderTextColor={c.placeholder}
+                                value={email}
+                                onChangeText={(text) => { setEmail(text); setLocalError(''); dispatch(clearError()); }}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                        </View>
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={[styles.label, { color: c.textSecondary }]}>Contraseña</Text>
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText,
-                            }]}
-                            placeholder="Mínimo 8 caracteres"
-                            placeholderTextColor={c.placeholder}
-                            value={password}
-                            onChangeText={(text) => { setPassword(text); setLocalError(''); }}
-                            secureTextEntry
-                            autoCapitalize="none"
-                        />
+                        <View style={[styles.inputRow, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}>
+                            <Ionicons name="lock-closed-outline" size={18} color={c.textMuted} style={styles.inputIcon} />
+                            <TextInput
+                                style={[styles.input, { color: c.inputText }]}
+                                placeholder="Mínimo 8 caracteres"
+                                placeholderTextColor={c.placeholder}
+                                value={password}
+                                onChangeText={(text) => { setPassword(text); setLocalError(''); }}
+                                secureTextEntry
+                                autoCapitalize="none"
+                            />
+                        </View>
                     </View>
 
                     <View style={styles.inputGroup}>
                         <Text style={[styles.label, { color: c.textSecondary }]}>Confirmar contraseña</Text>
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText,
-                            }]}
-                            placeholder="Repite la contraseña"
-                            placeholderTextColor={c.placeholder}
-                            value={confirmPassword}
-                            onChangeText={(text) => { setConfirmPassword(text); setLocalError(''); }}
-                            secureTextEntry
-                            autoCapitalize="none"
-                        />
+                        <View style={[styles.inputRow, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}>
+                            <Ionicons name="lock-closed-outline" size={18} color={c.textMuted} style={styles.inputIcon} />
+                            <TextInput
+                                style={[styles.input, { color: c.inputText }]}
+                                placeholder="Repite la contraseña"
+                                placeholderTextColor={c.placeholder}
+                                value={confirmPassword}
+                                onChangeText={(text) => { setConfirmPassword(text); setLocalError(''); }}
+                                secureTextEntry
+                                autoCapitalize="none"
+                            />
+                        </View>
                     </View>
 
                     <TouchableOpacity
@@ -147,7 +160,10 @@ const RegisterScreen = ({ navigation }) => {
                         {isLoading ? (
                             <ActivityIndicator color="#FFF" />
                         ) : (
-                            <Text style={styles.buttonText}>Crear Cuenta</Text>
+                            <View style={styles.buttonContent}>
+                                <Ionicons name="person-add-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                                <Text style={styles.buttonText}>Crear Cuenta</Text>
+                            </View>
                         )}
                     </TouchableOpacity>
 
@@ -161,6 +177,7 @@ const RegisterScreen = ({ navigation }) => {
                         <Text style={[styles.linkBold, { color: c.primary }]}>Inicia sesión</Text>
                     </TouchableOpacity>
                 </View>
+                </Animated.View>
             </ScrollView>
         </KeyboardAvoidingView>
         </SafeAreaView>
@@ -184,9 +201,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 24,
     },
-    logo: {
-        fontSize: 48,
-        marginBottom: 8,
+    logoCircle: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 10,
     },
     title: {
         fontSize: 28,
@@ -225,10 +246,19 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: 6,
     },
-    input: {
+    inputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         borderWidth: 1,
         borderRadius: 12,
-        paddingHorizontal: 16,
+        overflow: 'hidden',
+    },
+    inputIcon: {
+        paddingLeft: 14,
+    },
+    input: {
+        flex: 1,
+        paddingHorizontal: 12,
         paddingVertical: 14,
         fontSize: 16,
     },
@@ -242,6 +272,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 4,
+    },
+    buttonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     buttonText: {
         color: '#FFF',

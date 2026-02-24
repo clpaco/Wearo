@@ -1,101 +1,119 @@
-// Servicio del clima — OpenWeatherMap API
-// Usa una API key gratuita de https://openweathermap.org/api
+// Servicio del clima — Open-Meteo API (gratis, sin API key)
+// Docs: https://open-meteo.com/en/docs
 const axios = require('axios');
 
-const API_KEY = process.env.WEATHER_API_KEY || '';
-const BASE_URL = 'https://api.openweathermap.org/data/2.5';
+const BASE_URL = 'https://api.open-meteo.com/v1';
+
+// Mapeo de códigos WMO a descripciones en español
+const WMO_CODES = {
+    0: 'Despejado',
+    1: 'Principalmente despejado',
+    2: 'Parcialmente nublado',
+    3: 'Nublado',
+    45: 'Niebla',
+    48: 'Niebla con escarcha',
+    51: 'Llovizna ligera',
+    53: 'Llovizna',
+    55: 'Llovizna intensa',
+    56: 'Llovizna helada ligera',
+    57: 'Llovizna helada',
+    61: 'Lluvia ligera',
+    63: 'Lluvia',
+    65: 'Lluvia intensa',
+    66: 'Lluvia helada ligera',
+    67: 'Lluvia helada',
+    71: 'Nieve ligera',
+    73: 'Nieve',
+    75: 'Nieve intensa',
+    77: 'Granizo',
+    80: 'Chubascos',
+    81: 'Chubascos moderados',
+    82: 'Chubascos intensos',
+    85: 'Chubascos de nieve',
+    86: 'Chubascos de nieve intensos',
+    95: 'Tormenta',
+    96: 'Tormenta con granizo',
+    99: 'Tormenta con granizo intenso',
+};
+
+const getDescription = (code) => WMO_CODES[code] ?? 'Clima desconocido';
 
 // Obtener el clima actual por coordenadas
 const getCurrentWeather = async (lat, lon) => {
-    if (!API_KEY) {
-        return null; // Sin API key, devolver null (el clima es opcional)
-    }
-
     try {
-        const { data } = await axios.get(`${BASE_URL}/weather`, {
+        const { data } = await axios.get(`${BASE_URL}/forecast`, {
             params: {
-                lat,
-                lon,
-                appid: API_KEY,
-                units: 'metric',
-                lang: 'es',
+                latitude: lat,
+                longitude: lon,
+                current: 'temperature_2m,apparent_temperature,weathercode,windspeed_10m,precipitation',
+                timezone: 'auto',
+                forecast_days: 1,
             },
+            timeout: 10000,
         });
 
+        const cur = data.current;
         return {
-            temp: Math.round(data.main.temp),
-            description: data.weather[0].description,
-            icon: data.weather[0].icon,
-            feelsLike: Math.round(data.main.feels_like),
-            humidity: data.main.humidity,
-            city: data.name,
+            temp: Math.round(cur.temperature_2m),
+            feelsLike: Math.round(cur.apparent_temperature),
+            description: getDescription(cur.weathercode),
+            icon: String(cur.weathercode),
+            windspeed: Math.round(cur.windspeed_10m),
+            city: null, // El nombre de ciudad viene del frontend (Nominatim)
         };
     } catch (err) {
-        console.error('Error obteniendo clima:', err.message);
+        console.error('Error obteniendo clima (Open-Meteo):', err.message);
         return null;
     }
 };
 
-// Obtener el clima actual por nombre de ciudad
+// Compatibilidad: obtener clima por nombre de ciudad usando Nominatim + Open-Meteo
 const getWeatherByCity = async (city) => {
-    if (!API_KEY) return null;
     try {
-        const { data } = await axios.get(`${BASE_URL}/weather`, {
-            params: { q: city, appid: API_KEY, units: 'metric', lang: 'es' },
+        // Geocodificar ciudad con Nominatim
+        const geo = await axios.get('https://nominatim.openstreetmap.org/search', {
+            params: { q: city, format: 'json', limit: 1 },
+            headers: { 'User-Agent': 'OutfitVault/1.0 (educational project)' },
+            timeout: 6000,
         });
-        return {
-            temp: Math.round(data.main.temp),
-            description: data.weather[0].description,
-            icon: data.weather[0].icon,
-            feelsLike: Math.round(data.main.feels_like),
-            humidity: data.main.humidity,
-            city: data.name,
-        };
+        if (!geo.data || geo.data.length === 0) return null;
+        const { lat, lon } = geo.data[0];
+        const weather = await getCurrentWeather(parseFloat(lat), parseFloat(lon));
+        if (weather) weather.city = city;
+        return weather;
     } catch (err) {
-        console.error('Error obteniendo clima por ciudad:', err.message);
+        console.error('Error geocodificando ciudad:', err.message);
         return null;
     }
 };
 
 // Obtener pronóstico de 5 días
 const getForecast = async (lat, lon) => {
-    if (!API_KEY) return [];
-
     try {
         const { data } = await axios.get(`${BASE_URL}/forecast`, {
             params: {
-                lat,
-                lon,
-                appid: API_KEY,
-                units: 'metric',
-                lang: 'es',
-                cnt: 40, // 5 días × 8 intervalos de 3h
+                latitude: lat,
+                longitude: lon,
+                daily: 'temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum',
+                timezone: 'auto',
+                forecast_days: 6,
             },
+            timeout: 10000,
         });
 
-        // Agrupar por día y tomar el pronóstico del mediodía
-        const daily = {};
-        data.list.forEach((entry) => {
-            const date = entry.dt_txt.split(' ')[0];
-            const hour = parseInt(entry.dt_txt.split(' ')[1].split(':')[0]);
-            if (!daily[date] || Math.abs(hour - 12) < Math.abs(daily[date].hour - 12)) {
-                daily[date] = {
-                    hour,
-                    temp: Math.round(entry.main.temp),
-                    description: entry.weather[0].description,
-                    icon: entry.weather[0].icon,
-                };
-            }
-        });
-
-        return Object.entries(daily).map(([date, weather]) => ({
+        const daily = data.daily;
+        return daily.time.slice(0, 5).map((date, i) => ({
             date,
-            ...weather,
+            temp: Math.round((daily.temperature_2m_max[i] + daily.temperature_2m_min[i]) / 2),
+            tempMax: Math.round(daily.temperature_2m_max[i]),
+            tempMin: Math.round(daily.temperature_2m_min[i]),
+            description: getDescription(daily.weathercode[i]),
+            icon: String(daily.weathercode[i]),
         }));
     } catch (err) {
-        console.error('Error obteniendo pronóstico:', err.message);
+        console.error('Error obteniendo pronóstico (Open-Meteo):', err.message);
         return [];
     }
 };
 
-module.exports = { getCurrentWeather, getForecast, getWeatherByCity };
+module.exports = { getCurrentWeather, getWeatherByCity, getForecast };

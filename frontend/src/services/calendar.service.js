@@ -25,13 +25,13 @@ export const removeEntry = async (date) => {
     return data;
 };
 
-// Obtener clima actual
-export const getWeather = async (lat, lon) => {
+// Obtener clima actual por coordenadas (Open-Meteo, recomendado)
+export const getWeatherByCoords = async (lat, lon) => {
     const { data } = await api.get(`/calendar/weather?lat=${lat}&lon=${lon}`);
-    return data;
+    return data.clima;
 };
 
-// Obtener clima por nombre de ciudad
+// Obtener clima por nombre de ciudad (fallback, usa Nominatim + Open-Meteo en backend)
 export const getWeatherByCity = async (city) => {
     const { data } = await api.get(`/calendar/weather?city=${encodeURIComponent(city)}`);
     return data.clima;
@@ -47,4 +47,50 @@ export const getForecast = async (lat, lon) => {
 export const markOutfitWorn = async (date) => {
     const { data } = await api.post(`/calendar/${date}/worn`);
     return data;
+};
+
+// Buscar ciudades con Nominatim (OpenStreetMap) — llamada directa sin backend
+// Requiere al menos 2 caracteres. Devuelve [{place_id, name, displayShort, lat, lon}]
+export const searchCities = async (query) => {
+    if (!query || query.trim().length < 2) return [];
+    try {
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim())}&format=json&addressdetails=1&limit=7`,
+            {
+                headers: {
+                    'User-Agent': 'OutfitVault/1.0 (educational project)',
+                    'Accept-Language': 'es',
+                },
+            }
+        );
+        const json = await res.json();
+        const seen = new Set();
+        return json
+            .filter((item) => {
+                const t = item.type || '';
+                const cls = item.class || '';
+                return cls === 'place' || ['city','town','village','municipality','administrative','suburb'].includes(t);
+            })
+            .map((item) => {
+                const addr = item.address || {};
+                const cityName = addr.city || addr.town || addr.village || addr.municipality || item.name;
+                const country = addr.country || '';
+                const region = addr.state || addr.county || '';
+                const displayShort = [cityName, region, country].filter(Boolean).join(', ');
+                return {
+                    place_id: item.place_id,
+                    name: cityName,
+                    displayShort,
+                    lat: parseFloat(item.lat),
+                    lon: parseFloat(item.lon),
+                };
+            })
+            .filter((item) => {
+                if (!item.name || seen.has(item.name)) return false;
+                seen.add(item.name);
+                return true;
+            });
+    } catch {
+        return [];
+    }
 };

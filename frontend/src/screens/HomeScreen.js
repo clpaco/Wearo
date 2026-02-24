@@ -1,5 +1,5 @@
 // HomeScreen — Dashboard principal
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity, Image,
     StyleSheet, StatusBar, RefreshControl, FlatList,
@@ -15,12 +15,13 @@ import { fetchGarments } from '../store/wardrobeSlice';
 import { fetchMonthEntries } from '../store/calendarSlice';
 import { fetchWeatherRecommendation, clearWeatherRec } from '../store/aiSlice';
 import { useTheme } from '../hooks/useTheme';
-import { getWeatherByCity } from '../services/calendar.service';
+import { getWeatherByCoords, getWeatherByCity, searchCities } from '../services/calendar.service';
 import { IMAGE_BASE_URL } from '../services/api';
 import Card from '../components/Card';
 import StatCard from '../components/StatCard';
 
 const CITY_KEY = 'userCity';
+const CITY_COORDS_KEY = 'userCityCoords';
 
 const greeting = () => {
     const h = new Date().getHours();
@@ -59,8 +60,14 @@ const HomeScreen = ({ navigation }) => {
     const [weather, setWeather] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
     const [city, setCity] = useState(null);
-    const [cityInput, setCityInput] = useState('');
+    const [cityCoords, setCityCoords] = useState(null);
+
+    // Modal ciudad
     const [showCityModal, setShowCityModal] = useState(false);
+    const [cityInput, setCityInput] = useState('');
+    const [suggestions, setSuggestions] = useState([]);
+    const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+    const debounceRef = useRef(null);
 
     const todayStr = new Date().toISOString().split('T')[0];
     const todayEntry = entries.find((e) => {
@@ -68,24 +75,37 @@ const HomeScreen = ({ navigation }) => {
         return d === todayStr;
     });
 
-    // Cargar ciudad guardada al montar
+    // Cargar ciudad/coords guardadas al montar
     useEffect(() => {
-        AsyncStorage.getItem(CITY_KEY).then((stored) => {
-            if (stored) {
-                setCity(stored);
+        Promise.all([
+            AsyncStorage.getItem(CITY_KEY),
+            AsyncStorage.getItem(CITY_COORDS_KEY),
+        ]).then(([storedCity, storedCoords]) => {
+            if (storedCity) {
+                setCity(storedCity);
+                if (storedCoords) {
+                    try { setCityCoords(JSON.parse(storedCoords)); } catch { /* ignore */ }
+                }
             } else {
                 setShowCityModal(true);
             }
         });
     }, []);
 
-    // Obtener clima cuando cambia la ciudad
+    // Obtener clima cuando cambia la ciudad o coords
     useEffect(() => {
         if (!city) return;
-        getWeatherByCity(city)
-            .then(setWeather)
-            .catch(() => setWeather(null));
-    }, [city]);
+        if (cityCoords?.lat && cityCoords?.lon) {
+            getWeatherByCoords(cityCoords.lat, cityCoords.lon)
+                .then((w) => {
+                    if (w) setWeather({ ...w, city });
+                    else getWeatherByCity(city).then(setWeather).catch(() => setWeather(null));
+                })
+                .catch(() => getWeatherByCity(city).then(setWeather).catch(() => setWeather(null)));
+        } else {
+            getWeatherByCity(city).then(setWeather).catch(() => setWeather(null));
+        }
+    }, [city, cityCoords]);
 
     const loadData = useCallback(async () => {
         dispatch(fetchAllStats());
@@ -98,9 +118,15 @@ const HomeScreen = ({ navigation }) => {
         const end = `${y}-${String(m + 1).padStart(2, '0')}-${last}`;
         dispatch(fetchMonthEntries({ startDate: start, endDate: end }));
         if (city) {
-            getWeatherByCity(city).then(setWeather).catch(() => setWeather(null));
+            if (cityCoords?.lat && cityCoords?.lon) {
+                getWeatherByCoords(cityCoords.lat, cityCoords.lon)
+                    .then((w) => { if (w) setWeather({ ...w, city }); })
+                    .catch(() => {});
+            } else {
+                getWeatherByCity(city).then(setWeather).catch(() => setWeather(null));
+            }
         }
-    }, [dispatch, city]);
+    }, [dispatch, city, cityCoords]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -110,12 +136,39 @@ const HomeScreen = ({ navigation }) => {
         setRefreshing(false);
     };
 
-    const saveCity = async () => {
-        const trimmed = cityInput.trim();
-        if (!trimmed) return;
-        await AsyncStorage.setItem(CITY_KEY, trimmed);
-        setCity(trimmed);
+    // Autocompletar con debounce 500ms
+    const handleCityInputChange = (text) => {
+        setCityInput(text);
+        setSuggestions([]);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        if (text.trim().length < 2) {
+            setSuggestionsLoading(false);
+            return;
+        }
+        setSuggestionsLoading(true);
+        debounceRef.current = setTimeout(async () => {
+            const results = await searchCities(text);
+            setSuggestions(results);
+            setSuggestionsLoading(false);
+        }, 500);
+    };
+
+    const selectCity = async (suggestion) => {
+        const coords = { lat: suggestion.lat, lon: suggestion.lon };
+        await AsyncStorage.setItem(CITY_KEY, suggestion.name);
+        await AsyncStorage.setItem(CITY_COORDS_KEY, JSON.stringify(coords));
+        setCity(suggestion.name);
+        setCityCoords(coords);
         setCityInput('');
+        setSuggestions([]);
+        setShowCityModal(false);
+    };
+
+    const closeCityModal = () => {
+        setCityInput('');
+        setSuggestions([]);
+        setSuggestionsLoading(false);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
         setShowCityModal(false);
     };
 
@@ -154,7 +207,7 @@ const HomeScreen = ({ navigation }) => {
                             <Text style={styles.weatherDesc}>
                                 {weather?.description || 'Clima no disponible'}
                             </Text>
-                            <TouchableOpacity style={styles.cityRow} onPress={() => { setCityInput(city || ''); setShowCityModal(true); }}>
+                            <TouchableOpacity style={styles.cityRow} onPress={() => { setCityInput(''); setSuggestions([]); setShowCityModal(true); }}>
                                 <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.8)" />
                                 <Text style={styles.cityText}>{weather?.city || city || 'Toca para configurar'}</Text>
                             </TouchableOpacity>
@@ -306,7 +359,7 @@ const HomeScreen = ({ navigation }) => {
                 </TouchableOpacity>
             </ScrollView>
 
-            {/* Modal ciudad */}
+            {/* Modal ciudad con autocompletar */}
             <Modal visible={showCityModal} transparent animationType="fade">
                 <KeyboardAvoidingView
                     style={styles.modalOverlay}
@@ -315,28 +368,65 @@ const HomeScreen = ({ navigation }) => {
                     <View style={[styles.modalBox, { backgroundColor: c.surface }]}>
                         <Text style={[styles.modalTitle, { color: c.text }]}>¿En qué ciudad vives?</Text>
                         <Text style={[styles.modalSub, { color: c.textSecondary }]}>
-                            Introduce tu ciudad para ver el tiempo en el inicio.
+                            Escribe el nombre de tu ciudad para ver el tiempo.
                         </Text>
-                        <TextInput
-                            style={[styles.cityInput, { color: c.text, borderColor: c.border, backgroundColor: c.surfaceVariant }]}
-                            placeholder="Ej: Madrid, Barcelona, Buenos Aires…"
-                            placeholderTextColor={c.textMuted}
-                            value={cityInput}
-                            onChangeText={setCityInput}
-                            onSubmitEditing={saveCity}
-                            returnKeyType="done"
-                            autoFocus
-                        />
-                        <TouchableOpacity
-                            style={[styles.modalBtn, { backgroundColor: cityInput.trim() ? c.primary : c.border }]}
-                            onPress={saveCity}
-                            disabled={!cityInput.trim()}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.modalBtnText}>Guardar</Text>
-                        </TouchableOpacity>
+
+                        <View style={styles.citySearchWrap}>
+                            <TextInput
+                                style={[styles.cityInput, { color: c.text, borderColor: c.border, backgroundColor: c.surfaceVariant }]}
+                                placeholder="Ej: Madrid, Buenos Aires, Lima…"
+                                placeholderTextColor={c.textMuted}
+                                value={cityInput}
+                                onChangeText={handleCityInputChange}
+                                returnKeyType="search"
+                                autoFocus
+                                autoCorrect={false}
+                                autoCapitalize="words"
+                            />
+                            {suggestionsLoading && (
+                                <ActivityIndicator style={styles.searchSpinner} size="small" color={c.primary} />
+                            )}
+                        </View>
+
+                        {/* Lista de sugerencias */}
+                        {suggestions.length > 0 && (
+                            <View style={[styles.suggestionsBox, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+                                <FlatList
+                                    data={suggestions}
+                                    keyExtractor={(item) => String(item.place_id)}
+                                    keyboardShouldPersistTaps="handled"
+                                    style={{ maxHeight: 220 }}
+                                    renderItem={({ item }) => (
+                                        <TouchableOpacity
+                                            style={[styles.suggestionRow, { borderBottomColor: c.border }]}
+                                            onPress={() => selectCity(item)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={{ fontSize: 16, marginRight: 10 }}>📍</Text>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.suggestionName, { color: c.text }]} numberOfLines={1}>
+                                                    {item.name}
+                                                </Text>
+                                                <Text style={[styles.suggestionSub, { color: c.textMuted }]} numberOfLines={1}>
+                                                    {item.displayShort}
+                                                </Text>
+                                            </View>
+                                            <Ionicons name="chevron-forward" size={16} color={c.textMuted} />
+                                        </TouchableOpacity>
+                                    )}
+                                />
+                            </View>
+                        )}
+
+                        {/* Sin resultados */}
+                        {!suggestionsLoading && cityInput.trim().length >= 2 && suggestions.length === 0 && (
+                            <Text style={[styles.noResults, { color: c.textMuted }]}>
+                                No se encontraron ciudades. Prueba con otro nombre.
+                            </Text>
+                        )}
+
                         {city ? (
-                            <TouchableOpacity onPress={() => setShowCityModal(false)} style={{ marginTop: 12 }}>
+                            <TouchableOpacity onPress={closeCityModal} style={{ marginTop: 16 }}>
                                 <Text style={[styles.modalCancel, { color: c.textMuted }]}>Cancelar</Text>
                             </TouchableOpacity>
                         ) : null}
@@ -398,13 +488,26 @@ const styles = StyleSheet.create({
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
     modalBox: { width: '100%', borderRadius: 20, padding: 24 },
     modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 6 },
-    modalSub: { fontSize: 14, lineHeight: 20, marginBottom: 20 },
+    modalSub: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
+
+    citySearchWrap: { position: 'relative', marginBottom: 4 },
     cityInput: {
         borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
-        fontSize: 16, marginBottom: 16,
+        fontSize: 16, paddingRight: 44,
     },
-    modalBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-    modalBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+    searchSpinner: { position: 'absolute', right: 14, top: 14 },
+
+    suggestionsBox: {
+        borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 4,
+    },
+    suggestionRow: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 0.5,
+    },
+    suggestionName: { fontSize: 15, fontWeight: '600' },
+    suggestionSub: { fontSize: 12, marginTop: 1 },
+    noResults: { fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 4 },
+
     modalCancel: { textAlign: 'center', fontSize: 14 },
 });
 

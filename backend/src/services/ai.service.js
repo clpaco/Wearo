@@ -5,7 +5,7 @@ const axios = require('axios');
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const HF_KEY = process.env.HUGGINGFACE_API_KEY || '';
 const MODEL_NAME = 'gemini-2.0-flash';
-const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.3';
+const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.2';
 
 if (!GEMINI_KEY && !HF_KEY) {
     console.warn('[AI] Ni GEMINI_API_KEY ni HUGGINGFACE_API_KEY configuradas. IA no disponible.');
@@ -46,19 +46,34 @@ const getModel = () => {
 // ── HuggingFace Inference API helper ─────────────────────────────────────────
 
 const hfGenerate = async (prompt, maxTokens = 512) => {
-    const response = await axios.post(
-        `https://api-inference.huggingface.co/models/${HF_MODEL}`,
-        {
-            inputs: `<s>[INST] ${prompt} [/INST]`,
-            parameters: { max_new_tokens: maxTokens, temperature: 0.7, return_full_text: false },
-        },
-        {
-            headers: { Authorization: `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
-            timeout: 30000,
+    const makeRequest = async () => {
+        const response = await axios.post(
+            `https://api-inference.huggingface.co/models/${HF_MODEL}`,
+            {
+                inputs: `<s>[INST] ${prompt} [/INST]`,
+                parameters: { max_new_tokens: maxTokens, temperature: 0.7, return_full_text: false },
+            },
+            {
+                headers: { Authorization: `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
+                timeout: 60000,
+            }
+        );
+        const generated = response.data?.[0]?.generated_text || '';
+        return generated.trim();
+    };
+
+    try {
+        return await makeRequest();
+    } catch (err) {
+        // Retry once on 503 (model loading)
+        if (err.response?.status === 503 && err.response?.data?.estimated_time) {
+            const wait = Math.min(err.response.data.estimated_time * 1000, 30000);
+            console.log(`[AI] HuggingFace modelo cargando, reintentando en ${Math.round(wait / 1000)}s...`);
+            await new Promise((r) => setTimeout(r, wait));
+            return await makeRequest();
         }
-    );
-    const generated = response.data?.[0]?.generated_text || '';
-    return generated.trim();
+        throw err;
+    }
 };
 
 // ── Gemini: recomendar outfit por clima ─────────────────────────────────────
@@ -85,6 +100,7 @@ Responde en este formato JSON exacto sin markdown:
 }`;
 
     // Try Gemini first
+    let geminiError = '';
     if (GEMINI_KEY) {
         try {
             const model = getModel();
@@ -93,11 +109,13 @@ Responde en este formato JSON exacto sin markdown:
             const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             return JSON.parse(clean);
         } catch (err) {
+            geminiError = err.message;
             console.error('[AI] Gemini recommendByWeather falló:', err.message);
         }
     }
 
     // Fallback to HuggingFace
+    let hfError = '';
     if (HF_KEY) {
         try {
             const text = await hfGenerate(prompt);
@@ -105,11 +123,13 @@ Responde en este formato JSON exacto sin markdown:
             const jsonMatch = clean.match(/\{[\s\S]*\}/);
             if (jsonMatch) return JSON.parse(jsonMatch[0]);
         } catch (err) {
-            console.error('[AI] HuggingFace recommendByWeather falló:', err.message);
+            hfError = err.response?.data?.error || err.message;
+            console.error('[AI] HuggingFace recommendByWeather falló:', hfError);
         }
     }
 
-    return { outfitName: null, reason: 'No se pudo obtener una recomendacion en este momento.' };
+    const details = [geminiError && `Gemini: ${geminiError}`, hfError && `HuggingFace: ${hfError}`].filter(Boolean).join(' | ');
+    return { outfitName: null, reason: details || 'No se pudo obtener una recomendacion. Verifica las API keys.' };
 };
 
 // ── Gemini: chat sobre armario ───────────────────────────────────────────────
@@ -139,6 +159,7 @@ Responde siempre en espanol, de forma amigable y util. Si el usuario pregunta qu
     }
 
     // Try Gemini first
+    let geminiError = '';
     if (GEMINI_KEY) {
         try {
             const model = getModel();
@@ -162,11 +183,13 @@ Responde siempre en espanol, de forma amigable y util. Si el usuario pregunta qu
             const result = await chat.sendMessage(lastMsg.content);
             return result.response.text();
         } catch (err) {
+            geminiError = err.message;
             console.error('[AI] Gemini chat falló:', err.message);
         }
     }
 
     // Fallback to HuggingFace
+    let hfError = '';
     if (HF_KEY) {
         try {
             const conversationContext = validMessages
@@ -177,11 +200,13 @@ Responde siempre en espanol, de forma amigable y util. Si el usuario pregunta qu
             const reply = await hfGenerate(fullPrompt, 300);
             return reply || 'Lo siento, no pude generar una respuesta.';
         } catch (err) {
-            console.error('[AI] HuggingFace chat falló:', err.message);
+            hfError = err.response?.data?.error || err.message;
+            console.error('[AI] HuggingFace chat falló:', hfError);
         }
     }
 
-    return 'Lo siento, hubo un error al procesar tu pregunta. Verifica la configuracion de las API keys.';
+    const details = [geminiError && `Gemini: ${geminiError}`, hfError && `HuggingFace: ${hfError}`].filter(Boolean).join(' | ');
+    return `Error de IA: ${details || 'Verifica las API keys en .env y reinicia el backend.'}`;
 };
 
 // ── Gemini: recomendar prendas para comprar ──────────────────────────────────
@@ -205,6 +230,7 @@ const recommendPurchases = async ({ garments = [] }) => {
         : `Actua como un estilista personal. El usuario tiene un armario vacio. Recomienda 5 prendas basicas esenciales para empezar un armario capsula. Responde UNICAMENTE con JSON puro (sin markdown, sin explicaciones), en este formato exacto: [{"name":"...","description":"...","reason":"...","category":"..."}]`;
 
     // Try Gemini first
+    let geminiError = '';
     if (GEMINI_KEY) {
         try {
             const model = getModel();
@@ -214,11 +240,13 @@ const recommendPurchases = async ({ garments = [] }) => {
             const parsed = JSON.parse(clean);
             return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
         } catch (err) {
+            geminiError = err.message;
             console.error('[AI] Gemini shopping falló:', err.message);
         }
     }
 
     // Fallback to HuggingFace
+    let hfError = '';
     if (HF_KEY) {
         try {
             const text = await hfGenerate(prompt, 600);
@@ -229,11 +257,13 @@ const recommendPurchases = async ({ garments = [] }) => {
                 return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
             }
         } catch (err) {
-            console.error('[AI] HuggingFace shopping falló:', err.message);
+            hfError = err.response?.data?.error || err.message;
+            console.error('[AI] HuggingFace shopping falló:', hfError);
         }
     }
 
-    return [{ name: 'Error', description: 'No se pudieron obtener recomendaciones.', reason: 'Ambos proveedores fallaron', category: 'error' }];
+    const details = [geminiError && `Gemini: ${geminiError}`, hfError && `HuggingFace: ${hfError}`].filter(Boolean).join(' | ');
+    return [{ name: 'Error', description: details || 'No se pudieron obtener recomendaciones.', reason: 'Verifica las API keys', category: 'error' }];
 };
 
 module.exports = { recommendByWeather, chatAboutWardrobe, recommendPurchases };

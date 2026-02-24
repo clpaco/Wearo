@@ -43,6 +43,17 @@ const getModel = () => {
     return genAI.getGenerativeModel({ model: MODEL_NAME });
 };
 
+// ── Helper: acortar errores para el usuario ─────────────────────────────────
+const shortenError = (msg) => {
+    if (!msg) return '';
+    if (msg.includes('429')) return 'cuota agotada (espera unos minutos)';
+    if (msg.includes('401') || msg.includes('403')) return 'API key invalida';
+    if (msg.includes('404')) return 'modelo no encontrado';
+    if (msg.includes('503')) return 'modelo cargando, reintenta';
+    if (msg.length > 80) return msg.substring(0, 80) + '...';
+    return msg;
+};
+
 // ── HuggingFace Inference API (OpenAI-compatible) ────────────────────────────
 
 const hfGenerate = async (prompt, maxTokens = 512) => {
@@ -129,7 +140,7 @@ Responde en este formato JSON exacto sin markdown:
         }
     }
 
-    const details = [geminiError && `Gemini: ${geminiError}`, hfError && `HuggingFace: ${hfError}`].filter(Boolean).join(' | ');
+    const details = [geminiError && `Gemini: ${shortenError(geminiError)}`, hfError && `HuggingFace: ${shortenError(hfError)}`].filter(Boolean).join(' | ');
     return { outfitName: null, reason: details || 'No se pudo obtener una recomendacion. Verifica las API keys.' };
 };
 
@@ -143,15 +154,21 @@ const chatAboutWardrobe = async ({ messages = [], garments = [], outfits = [], w
         ? `\nCLIMA ACTUAL: ${weather.temp}°C, ${weather.description} en ${weather.city || 'su ciudad'}.`
         : '';
 
-    const systemContext = `Eres un asistente de moda personal llamado StyleAI. Tienes acceso al armario completo del usuario.
+    const systemContext = `Eres StyleAI, asistente de moda personal. Tienes acceso al armario del usuario.
 
-PRENDAS DEL USUARIO:
+PRENDAS:
 ${gStr}
 
-OUTFITS DEL USUARIO:
+OUTFITS:
 ${oStr}${weatherCtx}
 
-Responde siempre en espanol, de forma amigable y util. Si el usuario pregunta que ponerse para un evento, sugiere outfits guardados o combinaciones de sus prendas. Se conciso (max 3-4 frases).`;
+REGLAS:
+- Responde en espanol, conciso (2-3 frases max).
+- Si el usuario pregunta que ponerse para un evento y TIENE prendas adecuadas, recomienda de su armario.
+- Si NO tiene prendas adecuadas para el evento, preguntale: "No tienes prendas ideales para eso. Quieres que te sugiera que comprar?"
+- Solo sugiere compras si el usuario dice que si. Cuando lo hagas, da nombres concretos de productos (marca, modelo, color) que pueda buscar en tiendas.
+- No uses emojis.
+- No repitas el armario completo en cada respuesta.`;
 
     const validMessages = messages.filter((m) => m && m.content && m.content.trim());
     const lastMsg = validMessages[validMessages.length - 1];
@@ -206,7 +223,7 @@ Responde siempre en espanol, de forma amigable y util. Si el usuario pregunta qu
         }
     }
 
-    const details = [geminiError && `Gemini: ${geminiError}`, hfError && `HuggingFace: ${hfError}`].filter(Boolean).join(' | ');
+    const details = [geminiError && `Gemini: ${shortenError(geminiError)}`, hfError && `HuggingFace: ${shortenError(hfError)}`].filter(Boolean).join(' | ');
     return `Error de IA: ${details || 'Verifica las API keys en .env y reinicia el backend.'}`;
 };
 
@@ -227,8 +244,8 @@ const recommendPurchases = async ({ garments = [] }) => {
         .join(', ');
 
     const prompt = wardrobeSummary
-        ? `Actua como un estilista personal. El usuario tiene este armario: ${wardrobeSummary}. Recomienda 5 prendas concretas que deberia comprar para completar outfits versatiles y variados. Responde UNICAMENTE con JSON puro (sin markdown, sin explicaciones), en este formato exacto: [{"name":"...","description":"...","reason":"...","category":"..."}]`
-        : `Actua como un estilista personal. El usuario tiene un armario vacio. Recomienda 5 prendas basicas esenciales para empezar un armario capsula. Responde UNICAMENTE con JSON puro (sin markdown, sin explicaciones), en este formato exacto: [{"name":"...","description":"...","reason":"...","category":"..."}]`;
+        ? `Eres un estilista. El usuario tiene: ${wardrobeSummary}. Recomienda 5 prendas concretas para comprar (nombre de producto real con marca si es posible). Responde SOLO con JSON, sin texto extra. Formato: [{"name":"Pantalon chino Zara beige","description":"Versatil para combinar","reason":"Te falta un pantalon neutro","category":"pantalones"}]`
+        : `Eres un estilista. El usuario no tiene ropa. Recomienda 5 prendas basicas esenciales (nombres concretos con marca). Responde SOLO con JSON, sin texto extra. Formato: [{"name":"Camiseta basica blanca Uniqlo","description":"Esencial para cualquier armario","reason":"Base de todo outfit","category":"camisetas"}]`;
 
     // Try Gemini first
     let geminiError = '';
@@ -250,20 +267,27 @@ const recommendPurchases = async ({ garments = [] }) => {
     let hfError = '';
     if (HF_KEY) {
         try {
-            const text = await hfGenerate(prompt, 600);
+            const text = await hfGenerate(prompt, 800);
+            console.log('[AI] HuggingFace shopping raw:', text.substring(0, 200));
             const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            const arrayMatch = clean.match(/\[[\s\S]*\]/);
+            const arrayMatch = clean.match(/\[[\s\S]*?\]/);
             if (arrayMatch) {
                 const parsed = JSON.parse(arrayMatch[0]);
-                return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
             }
+            // If no JSON array found, try to parse the whole response
+            try {
+                const parsed = JSON.parse(clean);
+                if (Array.isArray(parsed)) return parsed.slice(0, 5);
+            } catch (_) { /* ignore */ }
+            hfError = 'Respuesta no tiene formato JSON valido';
         } catch (err) {
             hfError = err.response?.data?.error || err.message;
             console.error('[AI] HuggingFace shopping falló:', hfError);
         }
     }
 
-    const details = [geminiError && `Gemini: ${geminiError}`, hfError && `HuggingFace: ${hfError}`].filter(Boolean).join(' | ');
+    const details = [geminiError && `Gemini: ${shortenError(geminiError)}`, hfError && `HuggingFace: ${shortenError(hfError)}`].filter(Boolean).join(' | ');
     return [{ name: 'Error', description: details || 'No se pudieron obtener recomendaciones.', reason: 'Verifica las API keys', category: 'error' }];
 };
 

@@ -1,4 +1,4 @@
-// AIChatModal — Chat IA de outfits (Gemini) y recomendador de compras (Perplexity)
+// AIChatModal — Chat IA de outfits y recomendador de compras (Gemini)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
@@ -152,7 +152,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                             {isOutfits ? '🤖 StyleAI — Chat de outfits' : '🛍️ Qué me falta comprar'}
                         </Text>
                         <Text style={[styles.headerSub, { color: c.textSecondary }]}>
-                            {isOutfits ? 'Pregunta sobre tu armario' : 'Sugerencias personalizadas de Perplexity AI'}
+                            {isOutfits ? 'Pregunta sobre tu armario' : 'Sugerencias personalizadas con Gemini AI'}
                         </Text>
                     </View>
                     {isOutfits && chatMessages.length > 0 && (
@@ -260,7 +260,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                             <View style={styles.centeredLoad}>
                                 <Text style={{ fontSize: 40, marginBottom: 12 }}>🛍️</Text>
                                 <Text style={[{ color: c.textSecondary, textAlign: 'center' }]}>
-                                    No se pudieron obtener sugerencias.{'\n'}Verifica tu clave de Perplexity API.
+                                    No se pudieron obtener sugerencias.{'\n'}Verifica que GEMINI_API_KEY está configurada.
                                 </Text>
                                 <TouchableOpacity
                                     style={[styles.retryBtn, { backgroundColor: c.primary }]}

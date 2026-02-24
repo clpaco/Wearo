@@ -1,9 +1,7 @@
-// Servicio de IA — Gemini (outfits) + Perplexity (compras)
+// Servicio de IA — Gemini para todo (outfits, chat, compras)
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const axios = require('axios');
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
-const PERPLEXITY_KEY = process.env.PERPLEXITY_API_KEY || '';
 
 // ── Helpers de contexto ──────────────────────────────────────────────────────
 
@@ -113,14 +111,17 @@ Responde siempre en español, de forma amigable y útil. Si el usuario pregunta 
     }
 };
 
-// ── Perplexity: recomendar prendas para comprar ──────────────────────────────
+// ── Gemini: recomendar prendas para comprar ──────────────────────────────────
 
 const recommendPurchases = async ({ garments = [] }) => {
-    if (!PERPLEXITY_KEY) {
-        return [{ name: 'Sin API key', description: 'Configura PERPLEXITY_API_KEY', reason: '', category: 'info' }];
+    if (!GEMINI_KEY) {
+        return [{ name: 'Sin API key', description: 'Configura GEMINI_API_KEY', reason: '', category: 'info' }];
     }
 
     try {
+        const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
         const categories = {};
         garments.forEach((g) => {
             const cat = g.category || 'otro';
@@ -131,38 +132,16 @@ const recommendPurchases = async ({ garments = [] }) => {
             .join(', ');
 
         const prompt = wardrobeSummary
-            ? `El usuario tiene este armario: ${wardrobeSummary}. ¿Qué 5 prendas concretas le recomendarías comprar para completar outfits versátiles y variados? Para cada una incluye nombre, descripción breve, por qué la necesita y categoría.`
-            : 'El usuario tiene un armario vacío. ¿Qué 5 prendas básicas esenciales le recomendarías comprar para empezar? Para cada una incluye nombre, descripción breve, por qué la necesita y categoría.';
+            ? `Actúa como un estilista personal. El usuario tiene este armario: ${wardrobeSummary}. Recomienda 5 prendas concretas que debería comprar para completar outfits versátiles y variados. Responde ÚNICAMENTE con JSON puro (sin markdown, sin explicaciones), en este formato exacto: [{"name":"...","description":"...","reason":"...","category":"..."}]`
+            : `Actúa como un estilista personal. El usuario tiene un armario vacío. Recomienda 5 prendas básicas esenciales para empezar un armario cápsula. Responde ÚNICAMENTE con JSON puro (sin markdown, sin explicaciones), en este formato exacto: [{"name":"...","description":"...","reason":"...","category":"..."}]`;
 
-        const { data } = await axios.post(
-            'https://api.perplexity.ai/chat/completions',
-            {
-                model: 'sonar',
-                messages: [
-                    {
-                        role: 'system',
-                        content:
-                            'Eres un estilista personal. Responde SIEMPRE en JSON puro, sin markdown, con este formato exacto: [{"name":"...","description":"...","reason":"...","category":"..."}]',
-                    },
-                    { role: 'user', content: prompt },
-                ],
-                max_tokens: 800,
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${PERPLEXITY_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                timeout: 15000,
-            }
-        );
-
-        const text = data.choices[0].message.content.trim();
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
         const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(clean);
         return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
     } catch (err) {
-        console.error('Error Perplexity shopping:', err.message);
+        console.error('Error Gemini shopping:', err.message);
         return [{ name: 'Error', description: 'No se pudieron obtener recomendaciones.', reason: err.message, category: 'error' }];
     }
 };

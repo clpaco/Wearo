@@ -1,15 +1,16 @@
 // Pantalla de Perfil — perfil propio y de otros usuarios con seguidores
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, Image, TouchableOpacity, FlatList,
     StyleSheet, ActivityIndicator, StatusBar, ScrollView,
-    RefreshControl, Modal,
+    RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     fetchMyProfile, fetchUserProfile, fetchUserPosts,
     toggleFollow, fetchFollowers, fetchFollowing, clearViewedProfile,
 } from '../store/profileSlice';
+import { fetchComments, addComment, removeComment } from '../store/socialSlice';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
@@ -36,6 +37,17 @@ const UserRow = ({ item, colors, onPress }) => (
     </TouchableOpacity>
 );
 
+const getTimeAgo = (dateStr) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Ahora';
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return days < 7 ? `${days}d` : `${Math.floor(days / 7)}sem`;
+};
+
 const ProfileScreen = ({ navigation, route }) => {
     const dispatch = useDispatch();
     const { user }           = useSelector((s) => s.auth);
@@ -43,18 +55,23 @@ const ProfileScreen = ({ navigation, route }) => {
         myProfile, viewedProfile, viewedPosts, viewedHasMore,
         followers, following, isLoading,
     } = useSelector((s) => s.profile);
+    const { comments, commentsLoading } = useSelector((s) => s.social);
 
     const { theme } = useTheme();
     const c = theme.colors;
 
-    // targetId: undefined → mi perfil; si viene por params → perfil ajeno
     const targetId   = route?.params?.userId;
     const isOwnProfile = !targetId || String(targetId) === String(user?.id);
-    const canEdit    = !targetId; // Solo mostrar "Editar" desde la tab Perfil (sin params)
+    const canEdit    = !targetId;
     const profile    = isOwnProfile ? myProfile : viewedProfile;
 
-    const [listModal, setListModal] = useState(null); // 'followers' | 'following' | null
+    const [listModal, setListModal] = useState(null);
     const [refreshing, setRefreshing]  = useState(false);
+
+    // Post detail + comments
+    const [selectedPost, setSelectedPost] = useState(null);
+    const [commentInput, setCommentInput] = useState('');
+    const commentInputRef = useRef(null);
 
     const load = useCallback(() => {
         if (isOwnProfile) {
@@ -97,6 +114,24 @@ const ProfileScreen = ({ navigation, route }) => {
         }
     };
 
+    const openPostDetail = (post) => {
+        setSelectedPost(post);
+        setCommentInput('');
+        dispatch(fetchComments(post.id));
+    };
+
+    const handleSendComment = () => {
+        const text = commentInput.trim();
+        if (!text || !selectedPost) return;
+        setCommentInput('');
+        dispatch(addComment({ postId: selectedPost.id, text }));
+    };
+
+    const handleDeleteComment = (commentId) => {
+        if (!selectedPost) return;
+        dispatch(removeComment({ postId: selectedPost.id, commentId }));
+    };
+
     if (isLoading && !profile) {
         return (
             <View style={[styles.container, styles.center, { backgroundColor: c.background }]}>
@@ -113,7 +148,11 @@ const ProfileScreen = ({ navigation, route }) => {
     const renderPost = ({ item: post }) => {
         const thumb = post.garments?.[0]?.image_url;
         return (
-            <View style={[styles.postThumb, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+            <TouchableOpacity
+                style={[styles.postThumb, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                onPress={() => openPostDetail(post)}
+                activeOpacity={0.8}
+            >
                 {thumb ? (
                     <Image source={{ uri: `${IMAGE_BASE_URL}${thumb}` }} style={styles.postThumbImg} />
                 ) : (
@@ -122,9 +161,11 @@ const ProfileScreen = ({ navigation, route }) => {
                 <View style={[styles.postThumbOverlay, { backgroundColor: 'rgba(0,0,0,0.28)' }]}>
                     <Text style={styles.postThumbLike}>❤ {post.like_count}</Text>
                 </View>
-            </View>
+            </TouchableOpacity>
         );
     };
+
+    const postComments = selectedPost ? (comments[selectedPost.id] || []) : [];
 
     return (
         <View style={[styles.container, { backgroundColor: c.background }]}>
@@ -175,7 +216,6 @@ const ProfileScreen = ({ navigation, route }) => {
                                 <Text style={[styles.bio, { color: c.textSecondary }]}>{profile.bio}</Text>
                             ) : null}
 
-                            {/* Botón follow solo para perfiles ajenos */}
                             {!isOwnProfile && profile && (
                                 <TouchableOpacity
                                     style={[
@@ -248,6 +288,119 @@ const ProfileScreen = ({ navigation, route }) => {
                     </View>
                 </View>
             </Modal>
+
+            {/* Modal detalle de post con comentarios */}
+            <Modal visible={!!selectedPost} animationType="slide" transparent onRequestClose={() => setSelectedPost(null)}>
+                <KeyboardAvoidingView
+                    style={styles.modalOverlay}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <View style={[styles.postDetailBox, { backgroundColor: c.surface }]}>
+                        {/* Header */}
+                        <View style={styles.modalHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.modalTitle, { color: c.text }]} numberOfLines={1}>
+                                    👔 {selectedPost?.outfit?.name || selectedPost?.outfit_name || 'Outfit'}
+                                </Text>
+                                {selectedPost?.caption ? (
+                                    <Text style={[styles.postCaption, { color: c.textSecondary }]} numberOfLines={2}>
+                                        {selectedPost.caption}
+                                    </Text>
+                                ) : null}
+                            </View>
+                            <TouchableOpacity onPress={() => setSelectedPost(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <Text style={[styles.modalClose, { color: c.primary }]}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Stats */}
+                        <View style={[styles.postStats, { borderBottomColor: c.border }]}>
+                            <Text style={[styles.postStatText, { color: c.textMuted }]}>
+                                ❤ {selectedPost?.like_count || 0} &nbsp; 💬 {postComments.length}
+                            </Text>
+                        </View>
+
+                        {/* Comentarios */}
+                        <Text style={[styles.commentsLabel, { color: c.textSecondary }]}>Comentarios</Text>
+                        {commentsLoading ? (
+                            <ActivityIndicator style={{ paddingVertical: 24 }} color={c.primary} />
+                        ) : (
+                            <FlatList
+                                data={postComments}
+                                keyExtractor={(item) => item.id.toString()}
+                                style={styles.commentsList}
+                                contentContainerStyle={{ paddingBottom: 8 }}
+                                ListEmptyComponent={
+                                    <Text style={[styles.noComments, { color: c.textMuted }]}>
+                                        Sin comentarios aún. ¡Sé el primero!
+                                    </Text>
+                                }
+                                renderItem={({ item: comment }) => {
+                                    const isOwn = comment.author?.id === user?.id;
+                                    return (
+                                        <View style={[styles.commentRow, { borderBottomColor: c.border }]}>
+                                            <View style={[styles.commentAvatar, { backgroundColor: c.primary + '20' }]}>
+                                                {comment.author?.avatarUrl ? (
+                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${comment.author.avatarUrl}` }} style={styles.commentAvatarImg} />
+                                                ) : (
+                                                    <Text style={[styles.commentAvatarText, { color: c.primary }]}>
+                                                        {(comment.author?.fullName || '?')[0].toUpperCase()}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <View style={styles.commentMeta}>
+                                                    <Text style={[styles.commentAuthor, { color: c.text }]}>
+                                                        {comment.author?.fullName || 'Usuario'}
+                                                    </Text>
+                                                    <Text style={[styles.commentTime, { color: c.textMuted }]}>
+                                                        {getTimeAgo(comment.created_at)}
+                                                    </Text>
+                                                </View>
+                                                <Text style={[styles.commentText, { color: c.textSecondary }]}>
+                                                    {comment.text}
+                                                </Text>
+                                            </View>
+                                            {isOwn && (
+                                                <TouchableOpacity
+                                                    onPress={() => handleDeleteComment(comment.id)}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                    style={{ marginLeft: 8 }}
+                                                >
+                                                    <Text style={{ fontSize: 14 }}>🗑️</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    );
+                                }}
+                            />
+                        )}
+
+                        {/* Input comentario */}
+                        <View style={[styles.commentInputBar, { borderTopColor: c.border }]}>
+                            <TextInput
+                                ref={commentInputRef}
+                                style={[styles.commentInput, { color: c.text, backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                                placeholder="Escribe un comentario…"
+                                placeholderTextColor={c.textMuted}
+                                value={commentInput}
+                                onChangeText={setCommentInput}
+                                maxLength={500}
+                                returnKeyType="send"
+                                onSubmitEditing={handleSendComment}
+                            />
+                            <TouchableOpacity
+                                style={[styles.commentSendBtn, { backgroundColor: commentInput.trim() ? c.primary : c.border }]}
+                                onPress={handleSendComment}
+                                disabled={!commentInput.trim()}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#FFF', fontSize: 15 }}>↑</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 };
@@ -299,20 +452,43 @@ const styles = StyleSheet.create({
     postThumbLike: { color: '#FFF', fontSize: 11, fontWeight: '700' },
     noPosts: { textAlign: 'center', marginTop: 40, fontSize: 14 },
 
-    // Modal
+    // Seguidores modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalBox: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingBottom: 32 },
     modalHeader: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         padding: 20, paddingBottom: 12,
     },
-    modalTitle: { fontSize: 20, fontWeight: '700' },
+    modalTitle: { fontSize: 18, fontWeight: '700' },
     modalClose: { fontSize: 22, fontWeight: '700' },
     userRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5 },
     rowAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
     rowAvatarImg: { width: 44, height: 44, borderRadius: 22 },
     rowAvatarText: { fontSize: 18, fontWeight: '800' },
     rowName: { fontSize: 16, fontWeight: '600' },
+
+    // Post detail modal
+    postDetailBox: {
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        maxHeight: '80%', paddingTop: 4,
+    },
+    postCaption: { fontSize: 13, marginTop: 2 },
+    postStats: { paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 0.5 },
+    postStatText: { fontSize: 14 },
+    commentsLabel: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, fontSize: 13, fontWeight: '600', textTransform: 'uppercase' },
+    commentsList: { flex: 1 },
+    noComments: { textAlign: 'center', padding: 24, fontSize: 14 },
+    commentRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 16, borderBottomWidth: 0.5 },
+    commentAvatar: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginRight: 10, overflow: 'hidden' },
+    commentAvatarImg: { width: 34, height: 34, borderRadius: 17 },
+    commentAvatarText: { fontSize: 14, fontWeight: '700' },
+    commentMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+    commentAuthor: { fontSize: 13, fontWeight: '700' },
+    commentTime: { fontSize: 11 },
+    commentText: { fontSize: 14, lineHeight: 19 },
+    commentInputBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, gap: 8 },
+    commentInput: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, fontSize: 14 },
+    commentSendBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 });
 
 export default ProfileScreen;

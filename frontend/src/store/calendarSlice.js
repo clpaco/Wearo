@@ -41,6 +41,19 @@ export const removeEntry = createAsyncThunk(
     }
 );
 
+// Thunk: Marcar outfit como usado (incrementa times_worn)
+export const markOutfitWorn = createAsyncThunk(
+    'calendar/markWorn',
+    async (date, { rejectWithValue }) => {
+        try {
+            await calendarSvc.markOutfitWorn(date);
+            return date;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al marcar como usado');
+        }
+    }
+);
+
 const calendarSlice = createSlice({
     name: 'calendar',
     initialState: {

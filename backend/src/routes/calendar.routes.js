@@ -9,6 +9,7 @@ const {
     remove,
     getWeather,
     getForecast,
+    markWorn,
 } = require('../controllers/calendar.controller');
 
 // Todas las rutas requieren autenticación
@@ -31,5 +32,8 @@ router.post('/', assign);
 
 // DELETE /api/v1/calendar/:date — Eliminar entrada
 router.delete('/:date', remove);
+
+// POST /api/v1/calendar/:date/worn — Marcar outfit como usado
+router.post('/:date/worn', markWorn);
 
 module.exports = router;

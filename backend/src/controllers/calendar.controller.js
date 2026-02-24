@@ -1,5 +1,7 @@
 // Controlador de Calendario — planificación de outfits + clima
 const calendarModel = require('../models/calendar.model');
+const outfitModel = require('../models/outfit.model');
+const garmentModel = require('../models/garment.model');
 const weatherService = require('../services/weather.service');
 
 // GET /api/v1/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD — Entradas del mes
@@ -114,4 +116,26 @@ const getForecast = async (req, res) => {
     }
 };
 
-module.exports = { getRange, getByDate, assign, remove, getWeather, getForecast };
+// POST /api/v1/calendar/:date/worn — Marcar outfit como usado (incrementa times_worn)
+const markWorn = async (req, res) => {
+    try {
+        const { date } = req.params;
+        const userId = req.user.id;
+        const entry = await calendarModel.findByDate(userId, date);
+        if (!entry || !entry.outfit_id) {
+            return res.status(404).json({ error: true, mensaje: 'Sin outfit asignado en esa fecha' });
+        }
+        await outfitModel.incrementWorn(userId, entry.outfit_id);
+        if (Array.isArray(entry.garments)) {
+            for (const g of entry.garments) {
+                if (g.id) await garmentModel.incrementWorn(userId, g.id);
+            }
+        }
+        res.json({ mensaje: 'Outfit marcado como usado', outfit_id: entry.outfit_id });
+    } catch (err) {
+        console.error('Error marcando como usado:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al marcar como usado' });
+    }
+};
+
+module.exports = { getRange, getByDate, assign, remove, getWeather, getForecast, markWorn };

@@ -84,9 +84,17 @@ const aiSlice = createSlice({
                 state.error = action.payload;
             })
             // Chat
-            .addCase(sendMessage.pending, (state) => {
+            .addCase(sendMessage.pending, (state, action) => {
                 state.isLoading = true;
                 state.error = null;
+                // Add user message immediately so it appears in chat while waiting
+                const msgs = action.meta.arg?.messages;
+                if (msgs && msgs.length > 0) {
+                    const lastMsg = msgs[msgs.length - 1];
+                    if (lastMsg?.role === 'user') {
+                        state.chatMessages = [...state.chatMessages, lastMsg];
+                    }
+                }
             })
             .addCase(sendMessage.fulfilled, (state, action) => {
                 state.isLoading = false;

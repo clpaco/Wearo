@@ -5,7 +5,7 @@ import {
     StyleSheet, ActivityIndicator, StatusBar, ScrollView,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchMonthEntries, assignOutfitToDate, removeEntry, setSelectedDate } from '../store/calendarSlice';
+import { fetchMonthEntries, assignOutfitToDate, removeEntry, setSelectedDate, markOutfitWorn } from '../store/calendarSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
 import { useTheme } from '../hooks/useTheme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -26,6 +26,8 @@ const CalendarScreen = ({ navigation }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [showPicker, setShowPicker] = useState(false);
+    const [wornLoading, setWornLoading] = useState(false);
+    const [wornDone, setWornDone] = useState(false);
 
     // Cargar entradas del mes
     useEffect(() => {
@@ -39,6 +41,11 @@ const CalendarScreen = ({ navigation }) => {
     useEffect(() => {
         dispatch(fetchOutfits());
     }, [dispatch]);
+
+    // Reset wornDone cuando cambia el día seleccionado
+    useEffect(() => {
+        setWornDone(false);
+    }, [selectedDate]);
 
     // Navegar entre meses
     const changeMonth = (dir) => {
@@ -85,6 +92,14 @@ const CalendarScreen = ({ navigation }) => {
         dispatch(removeEntry(selectedDate));
     };
 
+    const handleMarkWorn = async () => {
+        setWornLoading(true);
+        await dispatch(markOutfitWorn(selectedDate));
+        dispatch(fetchOutfits()); // Refresh outfits to show updated times_worn
+        setWornLoading(false);
+        setWornDone(true);
+    };
+
     const selectedEntry = entries.find((e) => {
         const eDate = typeof e.date === 'string' ? e.date.split('T')[0] : e.date;
         return eDate === selectedDate;
@@ -92,6 +107,7 @@ const CalendarScreen = ({ navigation }) => {
 
     const calendarDays = generateCalendarDays();
     const today = new Date().toISOString().split('T')[0];
+    const canMarkWorn = selectedEntry?.outfit_id && selectedDate <= today;
 
     return (
         <View style={[styles.container, { backgroundColor: c.background }]}>
@@ -181,6 +197,28 @@ const CalendarScreen = ({ navigation }) => {
                                     </Text>
                                 </View>
                             </View>
+
+                            {/* Botón Marcar como usado (solo en fechas pasadas o hoy) */}
+                            {canMarkWorn && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.wornBtn,
+                                        { backgroundColor: wornDone ? c.success || '#27AE60' : c.accent },
+                                    ]}
+                                    onPress={handleMarkWorn}
+                                    disabled={wornLoading || wornDone}
+                                    activeOpacity={0.8}
+                                >
+                                    {wornLoading ? (
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                    ) : (
+                                        <Text style={styles.wornBtnText}>
+                                            {wornDone ? '✅ Marcado como usado' : '✅ Marcar como usado'}
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+
                             <TouchableOpacity
                                 style={[styles.removeBtn, { borderColor: c.error }]}
                                 onPress={handleRemove}
@@ -284,6 +322,10 @@ const styles = StyleSheet.create({
     },
     outfitLabel: { fontSize: 13, fontWeight: '600' },
     outfitName: { fontSize: 17, fontWeight: '700', marginTop: 2 },
+    wornBtn: {
+        paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginBottom: 10,
+    },
+    wornBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
     removeBtn: { paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
     removeBtnText: { fontSize: 14, fontWeight: '600' },
     noOutfitText: { fontSize: 15, marginBottom: 12, textAlign: 'center' },

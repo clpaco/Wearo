@@ -42,3 +42,9 @@ export const getForecast = async (lat, lon) => {
     const { data } = await api.get(`/calendar/forecast?lat=${lat}&lon=${lon}`);
     return data;
 };
+
+// Marcar outfit como usado en una fecha
+export const markOutfitWorn = async (date) => {
+    const { data } = await api.post(`/calendar/${date}/worn`);
+    return data;
+};

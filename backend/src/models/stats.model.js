@@ -5,11 +5,11 @@ const { query } = require('../config/db');
 const getOverview = async (userId) => {
     const result = await query(
         `SELECT
-      (SELECT COUNT(*) FROM garments WHERE user_id = $1) AS total_garments,
-      (SELECT COUNT(*) FROM garments WHERE user_id = $1 AND is_favorite = true) AS favorite_garments,
+      (SELECT COUNT(*) FROM garments WHERE user_id = $1) AS total_prendas,
+      (SELECT COUNT(*) FROM garments WHERE user_id = $1 AND is_favorite = true) AS prendas_favoritas,
       (SELECT COUNT(*) FROM outfits WHERE user_id = $1) AS total_outfits,
       (SELECT COUNT(*) FROM outfits WHERE user_id = $1 AND is_favorite = true) AS favorite_outfits,
-      (SELECT COUNT(*) FROM calendar_entries WHERE user_id = $1) AS total_planned,
+      (SELECT COUNT(*) FROM calendar_entries WHERE user_id = $1) AS outfits_planificados,
       (SELECT COUNT(DISTINCT category) FROM garments WHERE user_id = $1) AS unique_categories`,
         [userId]
     );

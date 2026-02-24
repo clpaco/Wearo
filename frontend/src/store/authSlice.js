@@ -52,7 +52,7 @@ const authSlice = createSlice({
         refreshToken: null,
         isAuthenticated: false,
         isLoading: false,
-        isRestoringSession: true, // true mientras comprobamos SecureStore
+        isRestoringSession: true, // true mientras comprobamos AsyncStorage
         error: null,
     },
     reducers: {

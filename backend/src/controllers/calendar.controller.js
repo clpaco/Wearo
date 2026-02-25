@@ -1,4 +1,4 @@
-// Controlador de Calendario — planificación de outfits + clima
+// Controlador de Calendario — multi-entry, auto-worn, solo hoy editable
 const calendarModel = require('../models/calendar.model');
 const outfitModel = require('../models/outfit.model');
 const garmentModel = require('../models/garment.model');
@@ -23,44 +23,87 @@ const getRange = async (req, res) => {
     }
 };
 
-// GET /api/v1/calendar/:date — Detalle de un día
+// GET /api/v1/calendar/:date — Entradas de un día (devuelve array)
 const getByDate = async (req, res) => {
     try {
-        const entry = await calendarModel.findByDate(req.user.id, req.params.date);
-        res.json({ entrada: entry });
+        const entries = await calendarModel.findByDate(req.user.id, req.params.date);
+        res.json({ entradas: entries });
     } catch (err) {
-        console.error('Error obteniendo entrada:', err);
-        res.status(500).json({ error: true, mensaje: 'Error al obtener la entrada' });
+        console.error('Error obteniendo entradas:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al obtener las entradas' });
     }
 };
 
-// POST /api/v1/calendar — Asignar outfit a una fecha (upsert)
+// POST /api/v1/calendar — Añadir entrada (outfit o prendas sueltas) solo para hoy
 const assign = async (req, res) => {
     try {
-        const { date, outfitId, notes } = req.body;
+        const { date, outfitId, garmentIds, notes } = req.body;
         if (!date) {
             return res.status(400).json({ error: true, mensaje: 'La fecha es obligatoria' });
         }
 
-        const entry = await calendarModel.upsert(req.user.id, {
-            date, outfitId, notes,
+        // Solo permitir entradas para hoy
+        const today = new Date().toISOString().split('T')[0];
+        if (date !== today) {
+            return res.status(400).json({ error: true, mensaje: 'Solo puedes añadir entradas para hoy' });
+        }
+
+        if (!outfitId && (!garmentIds || garmentIds.length === 0)) {
+            return res.status(400).json({ error: true, mensaje: 'Selecciona un outfit o al menos una prenda' });
+        }
+
+        // Insertar con worn = true (auto-worn para hoy)
+        const entry = await calendarModel.insert(req.user.id, {
+            date, outfitId, garmentIds, notes, worn: true,
         });
 
-        res.status(201).json({ mensaje: 'Outfit asignado al calendario', entrada: entry });
+        // Auto-incrementar contadores de uso
+        if (outfitId) {
+            await outfitModel.incrementWorn(req.user.id, outfitId);
+            const outfit = await outfitModel.findById(req.user.id, outfitId);
+            if (outfit && Array.isArray(outfit.garments)) {
+                for (const g of outfit.garments) {
+                    if (g.id) await garmentModel.incrementWorn(req.user.id, g.id);
+                }
+            }
+        }
+        if (garmentIds && garmentIds.length > 0) {
+            for (const gId of garmentIds) {
+                await garmentModel.incrementWorn(req.user.id, gId);
+            }
+        }
+
+        // Re-fetch the enriched entry with garments data
+        const enrichedEntries = await calendarModel.findByDate(req.user.id, date);
+        const enrichedEntry = enrichedEntries.find(e => e.id === entry.id) || entry;
+
+        res.status(201).json({ mensaje: 'Entrada añadida al calendario', entrada: enrichedEntry });
     } catch (err) {
-        console.error('Error asignando outfit:', err);
-        res.status(500).json({ error: true, mensaje: 'Error al asignar outfit' });
+        console.error('Error asignando entrada:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al asignar entrada' });
     }
 };
 
-// DELETE /api/v1/calendar/:date — Eliminar entrada del calendario
-const remove = async (req, res) => {
+// DELETE /api/v1/calendar/entry/:id — Eliminar entrada (solo hoy)
+const removeEntry = async (req, res) => {
     try {
-        const entry = await calendarModel.remove(req.user.id, req.params.date);
+        const entryId = req.params.id;
+        const userId = req.user.id;
+
+        const entry = await calendarModel.findById(entryId, userId);
         if (!entry) {
-            return res.status(404).json({ error: true, mensaje: 'No hay entrada para esa fecha' });
+            return res.status(404).json({ error: true, mensaje: 'Entrada no encontrada' });
         }
-        res.json({ mensaje: 'Entrada eliminada del calendario' });
+
+        // Solo permitir eliminar entradas de hoy
+        const today = new Date().toISOString().split('T')[0];
+        const entryDate = typeof entry.date === 'string' ? entry.date.split('T')[0] : String(entry.date);
+        if (entryDate !== today) {
+            return res.status(400).json({ error: true, mensaje: 'Solo puedes eliminar entradas de hoy' });
+        }
+
+        await calendarModel.removeById(entryId, userId);
+        res.json({ mensaje: 'Entrada eliminada del calendario', entryId: Number(entryId) });
     } catch (err) {
         console.error('Error eliminando entrada:', err);
         res.status(500).json({ error: true, mensaje: 'Error al eliminar entrada' });
@@ -116,27 +159,4 @@ const getForecast = async (req, res) => {
     }
 };
 
-// POST /api/v1/calendar/:date/worn — Marcar outfit como usado (incrementa times_worn)
-const markWorn = async (req, res) => {
-    try {
-        const { date } = req.params;
-        const userId = req.user.id;
-        const entry = await calendarModel.findByDate(userId, date);
-        if (!entry || !entry.outfit_id) {
-            return res.status(404).json({ error: true, mensaje: 'Sin outfit asignado en esa fecha' });
-        }
-        await outfitModel.incrementWorn(userId, entry.outfit_id);
-        if (Array.isArray(entry.garments)) {
-            for (const g of entry.garments) {
-                if (g.id) await garmentModel.incrementWorn(userId, g.id);
-            }
-        }
-        await calendarModel.setWorn(userId, date);
-        res.json({ mensaje: 'Outfit marcado como usado', outfit_id: entry.outfit_id, worn: true });
-    } catch (err) {
-        console.error('Error marcando como usado:', err);
-        res.status(500).json({ error: true, mensaje: 'Error al marcar como usado' });
-    }
-};
-
-module.exports = { getRange, getByDate, assign, remove, getWeather, getForecast, markWorn };
+module.exports = { getRange, getByDate, assign, removeEntry, getWeather, getForecast };

@@ -7,13 +7,14 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchOutfits, removeOutfit } from '../store/outfitsSlice';
+import { fetchOutfits, removeOutfit, toggleOutfitFavorite } from '../store/outfitsSlice';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import AIChatModal from '../components/AIChatModal';
+import GarmentCarousel from '../components/GarmentCarousel';
 
 // Habilitar LayoutAnimation en Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -100,51 +101,51 @@ const OutfitsScreen = ({ navigation }) => {
         const garments = typeof item.garments === 'string' ? JSON.parse(item.garments) : item.garments;
 
         return (
-            <TouchableOpacity
+            <View
                 style={[styles.outfitCard, { backgroundColor: c.surface, borderColor: c.border }]}
-                onPress={() => navigation.navigate('OutfitDetail', { outfit: { ...item, garments } })}
-                activeOpacity={0.8}
             >
-                {/* Mosaico de prendas */}
-                <View style={styles.mosaic}>
-                    {garments.slice(0, 4).map((g, i) => (
-                        g.image_url ? (
-                            <Image
-                                key={g.id}
-                                source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }}
-                                style={[styles.mosaicImg, garments.length === 1 && styles.mosaicSingle]}
-                            />
-                        ) : (
-                            <View key={g.id || i} style={[styles.mosaicPlaceholder, { backgroundColor: c.surfaceVariant }]}>
-                                <Ionicons name="shirt-outline" size={20} color={c.textMuted} />
-                            </View>
-                        )
-                    ))}
-                    {garments.length === 0 && (
-                        <View style={[styles.mosaicPlaceholder, styles.mosaicSingle, { backgroundColor: c.surfaceVariant }]}>
-                            <Ionicons name="albums-outline" size={32} color={c.textMuted} />
-                        </View>
-                    )}
-                </View>
+                {/* Carousel de prendas */}
+                <GarmentCarousel garments={garments} height={180} />
 
-                <View style={styles.outfitInfo}>
+                <TouchableOpacity
+                    style={styles.outfitInfo}
+                    onPress={() => navigation.navigate('OutfitDetail', { outfit: { ...item, garments } })}
+                    activeOpacity={0.7}
+                >
                     <View style={styles.outfitTitleRow}>
                         <Text style={[styles.outfitName, { color: c.text }]} numberOfLines={1}>
                             {item.name}
                         </Text>
-                        {item.is_favorite && <Ionicons name="heart" size={18} color={c.error || '#E17055'} />}
+                        <TouchableOpacity
+                            onPress={(e) => {
+                                e.stopPropagation?.();
+                                dispatch(toggleOutfitFavorite({ id: item.id, isFavorite: !item.is_favorite }));
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons
+                                name={item.is_favorite ? 'heart' : 'heart-outline'}
+                                size={20}
+                                color={item.is_favorite ? (c.error || '#E17055') : c.textMuted}
+                            />
+                        </TouchableOpacity>
                     </View>
                     <Text style={[styles.outfitMeta, { color: c.textSecondary }]}>
                         {garments.length} prenda{garments.length !== 1 ? 's' : ''}
                         {item.occasion ? ` · ${item.occasion}` : ''}
                     </Text>
-                    {item.times_worn > 0 && (
+                    {item.last_worn ? (
+                        <Text style={[styles.wornCount, { color: c.textMuted }]}>
+                            Usado: {new Date(item.last_worn + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                            {item.times_worn > 1 ? ` (${item.times_worn}x)` : ''}
+                        </Text>
+                    ) : item.times_worn > 0 ? (
                         <Text style={[styles.wornCount, { color: c.textMuted }]}>
                             Usado {item.times_worn}x
                         </Text>
-                    )}
-                </View>
-            </TouchableOpacity>
+                    ) : null}
+                </TouchableOpacity>
+            </View>
         );
     };
 
@@ -340,14 +341,6 @@ const styles = StyleSheet.create({
         borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 16,
         shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-    },
-    mosaic: {
-        flexDirection: 'row', flexWrap: 'wrap', height: 160,
-    },
-    mosaicImg: { width: '50%', height: 80 },
-    mosaicSingle: { width: '100%', height: 160 },
-    mosaicPlaceholder: {
-        width: '50%', height: 80, justifyContent: 'center', alignItems: 'center',
     },
     outfitInfo: { padding: 14 },
     outfitTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

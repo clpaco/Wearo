@@ -1,88 +1,117 @@
-// Modelo de Calendario — planificación de outfits por día
+// Modelo de Calendario — multi-entry por dia, outfits o prendas sueltas, auto-worn
 const { query } = require('../config/db');
 
-// Auto-migration: agregar columna worn si no existe
+// Auto-migrations
 query('ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS worn BOOLEAN DEFAULT false')
-    .catch(() => { /* columna ya existe o error menor, ignorar */ });
+    .catch(() => { /* ya existe */ });
+query('ALTER TABLE calendar_entries ADD COLUMN IF NOT EXISTS garment_ids INTEGER[] DEFAULT \'{}\'')
+    .catch(() => { /* ya existe */ });
+// Permitir multiples entradas por usuario+fecha
+query('ALTER TABLE calendar_entries DROP CONSTRAINT IF EXISTS calendar_entries_user_id_date_key')
+    .catch(() => { /* constraint no existia */ });
 
-// Asignar o actualizar un outfit para una fecha (upsert)
-const upsert = async (userId, entryData) => {
-    const { date, outfitId, notes, weatherTemp, weatherDesc, weatherIcon } = entryData;
+// ── Insertar nueva entrada ──────────────────────────────────────────────────────
+const insert = async (userId, entryData) => {
+    const { date, outfitId, garmentIds, notes, worn } = entryData;
     const result = await query(
-        `INSERT INTO calendar_entries (user_id, date, outfit_id, notes, weather_temp, weather_desc, weather_icon)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (user_id, date)
-     DO UPDATE SET
-       outfit_id = COALESCE($3, calendar_entries.outfit_id),
-       notes = COALESCE($4, calendar_entries.notes),
-       weather_temp = COALESCE($5, calendar_entries.weather_temp),
-       weather_desc = COALESCE($6, calendar_entries.weather_desc),
-       weather_icon = COALESCE($7, calendar_entries.weather_icon)
-     RETURNING *`,
-        [userId, date, outfitId, notes, weatherTemp, weatherDesc, weatherIcon]
+        `INSERT INTO calendar_entries (user_id, date, outfit_id, garment_ids, notes, worn)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [userId, date, outfitId || null, garmentIds || [], notes || null, worn || false]
     );
     return result.rows[0];
 };
 
-// Obtener entradas por rango de fechas (vista mensual)
+// ── Obtener entradas por rango (vista mensual) ─────────────────────────────────
 const findByRange = async (userId, startDate, endDate) => {
     const result = await query(
-        `SELECT ce.*, o.name AS outfit_name,
-      COALESCE(
-        json_agg(
-          json_build_object('id', g.id, 'name', g.name, 'image_url', g.image_url, 'category', g.category)
-          ORDER BY og.position
-        ) FILTER (WHERE g.id IS NOT NULL), '[]'
-      ) AS garments
-    FROM calendar_entries ce
-    LEFT JOIN outfits o ON ce.outfit_id = o.id
-    LEFT JOIN outfit_garments og ON o.id = og.outfit_id
-    LEFT JOIN garments g ON og.garment_id = g.id
-    WHERE ce.user_id = $1 AND ce.date >= $2 AND ce.date <= $3
-    GROUP BY ce.id, o.name
-    ORDER BY ce.date`,
+        `SELECT ce.*,
+            o.name AS outfit_name,
+            CASE
+                WHEN ce.outfit_id IS NOT NULL THEN
+                    COALESCE(
+                        (SELECT json_agg(
+                            json_build_object('id', g.id, 'name', g.name, 'image_url', g.image_url, 'category', g.category)
+                            ORDER BY og.position
+                        )
+                        FROM outfit_garments og
+                        JOIN garments g ON og.garment_id = g.id
+                        WHERE og.outfit_id = ce.outfit_id),
+                        '[]'::json
+                    )
+                WHEN array_length(ce.garment_ids, 1) > 0 THEN
+                    COALESCE(
+                        (SELECT json_agg(
+                            json_build_object('id', g.id, 'name', g.name, 'image_url', g.image_url, 'category', g.category)
+                        )
+                        FROM garments g
+                        WHERE g.id = ANY(ce.garment_ids)),
+                        '[]'::json
+                    )
+                ELSE '[]'::json
+            END AS garments
+        FROM calendar_entries ce
+        LEFT JOIN outfits o ON ce.outfit_id = o.id
+        WHERE ce.user_id = $1 AND ce.date >= $2 AND ce.date <= $3
+        ORDER BY ce.date, ce.id`,
         [userId, startDate, endDate]
     );
     return result.rows;
 };
 
-// Obtener una entrada específica por fecha
+// ── Obtener entradas de un dia (devuelve array) ─────────────────────────────────
 const findByDate = async (userId, date) => {
     const result = await query(
-        `SELECT ce.*, o.name AS outfit_name,
-      COALESCE(
-        json_agg(
-          json_build_object('id', g.id, 'name', g.name, 'image_url', g.image_url, 'category', g.category)
-          ORDER BY og.position
-        ) FILTER (WHERE g.id IS NOT NULL), '[]'
-      ) AS garments
-    FROM calendar_entries ce
-    LEFT JOIN outfits o ON ce.outfit_id = o.id
-    LEFT JOIN outfit_garments og ON o.id = og.outfit_id
-    LEFT JOIN garments g ON og.garment_id = g.id
-    WHERE ce.user_id = $1 AND ce.date = $2
-    GROUP BY ce.id, o.name`,
+        `SELECT ce.*,
+            o.name AS outfit_name,
+            CASE
+                WHEN ce.outfit_id IS NOT NULL THEN
+                    COALESCE(
+                        (SELECT json_agg(
+                            json_build_object('id', g.id, 'name', g.name, 'image_url', g.image_url, 'category', g.category)
+                            ORDER BY og.position
+                        )
+                        FROM outfit_garments og
+                        JOIN garments g ON og.garment_id = g.id
+                        WHERE og.outfit_id = ce.outfit_id),
+                        '[]'::json
+                    )
+                WHEN array_length(ce.garment_ids, 1) > 0 THEN
+                    COALESCE(
+                        (SELECT json_agg(
+                            json_build_object('id', g.id, 'name', g.name, 'image_url', g.image_url, 'category', g.category)
+                        )
+                        FROM garments g
+                        WHERE g.id = ANY(ce.garment_ids)),
+                        '[]'::json
+                    )
+                ELSE '[]'::json
+            END AS garments
+        FROM calendar_entries ce
+        LEFT JOIN outfits o ON ce.outfit_id = o.id
+        WHERE ce.user_id = $1 AND ce.date = $2
+        ORDER BY ce.id`,
         [userId, date]
     );
-    return result.rows[0] || null;
+    return result.rows;
 };
 
-// Eliminar una entrada
-const remove = async (userId, date) => {
+// ── Buscar entrada por ID ───────────────────────────────────────────────────────
+const findById = async (entryId, userId) => {
     const result = await query(
-        'DELETE FROM calendar_entries WHERE user_id = $1 AND date = $2 RETURNING id',
-        [userId, date]
+        'SELECT * FROM calendar_entries WHERE id = $1 AND user_id = $2',
+        [entryId, userId]
     );
     return result.rows[0] || null;
 };
 
-// Marcar entrada como usada
-const setWorn = async (userId, date) => {
+// ── Eliminar entrada por ID ─────────────────────────────────────────────────────
+const removeById = async (entryId, userId) => {
     const result = await query(
-        'UPDATE calendar_entries SET worn = true WHERE user_id = $1 AND date = $2 RETURNING *',
-        [userId, date]
+        'DELETE FROM calendar_entries WHERE id = $1 AND user_id = $2 RETURNING *',
+        [entryId, userId]
     );
     return result.rows[0] || null;
 };
 
-module.exports = { upsert, findByRange, findByDate, remove, setWorn };
+module.exports = { insert, findByRange, findByDate, findById, removeById };

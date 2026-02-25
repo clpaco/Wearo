@@ -52,10 +52,15 @@ const getProfile = async (req, res) => {
 // PUT /api/v1/users/me — Actualizar perfil
 const updateMe = async (req, res) => {
     try {
-        const { fullName, bio } = req.body;
-        const updated = await profileModel.updateProfile(req.user.id, { fullName, bio });
+        const { fullName, bio, isPublic, username, gender, stylePreferences, onboardingDone } = req.body;
+        const updated = await profileModel.updateProfile(req.user.id, {
+            fullName, bio, isPublic, username, gender, stylePreferences, onboardingDone,
+        });
         res.json({ mensaje: 'Perfil actualizado', profile: updated });
     } catch (err) {
+        if (err.constraint === 'idx_users_username') {
+            return res.status(409).json({ error: true, mensaje: 'Ese nombre de usuario ya está en uso' });
+        }
         console.error('Error updateMe:', err);
         res.status(500).json({ error: true, mensaje: 'Error al actualizar perfil' });
     }

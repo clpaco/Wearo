@@ -3,6 +3,7 @@ const aiService     = require('../services/ai.service');
 const garmentModel  = require('../models/garment.model');
 const outfitModel   = require('../models/outfit.model');
 const weatherService = require('../services/weather.service');
+const { query: dbQuery } = require('../config/db');
 
 // POST /api/v1/ai/weather-recommend — Sugerencia de outfit según clima
 const weatherRecommend = async (req, res) => {
@@ -67,8 +68,13 @@ const chat = async (req, res) => {
 // POST /api/v1/ai/shopping — Recomendaciones de compra con Perplexity
 const shopping = async (req, res) => {
     try {
-        const garments = await garmentModel.findAllByUser(req.user.id);
-        const recommendations = await aiService.recommendPurchases({ garments });
+        const { query } = req.body || {};
+        const [garments, userRow] = await Promise.all([
+            garmentModel.findAllByUser(req.user.id),
+            dbQuery('SELECT gender FROM users WHERE id = $1', [req.user.id]).then(r => r.rows[0]),
+        ]);
+        const gender = userRow?.gender || '';
+        const recommendations = await aiService.recommendPurchases({ garments, query: query || '', gender });
         res.json({ recommendations });
     } catch (err) {
         console.error('Error IA shopping:', err);

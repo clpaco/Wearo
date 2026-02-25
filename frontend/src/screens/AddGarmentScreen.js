@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch } from 'react-redux';
 import { addGarment, editGarment } from '../store/wardrobeSlice';
+import { detectColor as detectColorSvc } from '../services/garments.service';
 import { useTheme } from '../hooks/useTheme';
 import ScreenHeader from '../components/ScreenHeader';
 
@@ -22,15 +23,21 @@ const COLORS = [
     { name: 'negro', hex: '#1A1A2E' },
     { name: 'blanco', hex: '#F5F5F7' },
     { name: 'gris', hex: '#6B7280' },
-    { name: 'rojo', hex: '#E17055' },
-    { name: 'azul', hex: '#74B9FF' },
-    { name: 'verde', hex: '#00B894' },
-    { name: 'amarillo', hex: '#FDCB6E' },
-    { name: 'rosa', hex: '#FD79A8' },
-    { name: 'morado', hex: '#6C5CE7' },
-    { name: 'marrón', hex: '#B8860B' },
-    { name: 'beige', hex: '#D6C4A8' },
-    { name: 'naranja', hex: '#E67E22' },
+    { name: 'gris claro', hex: '#C0C0C0' },
+    { name: 'rojo', hex: '#DC3545' },
+    { name: 'azul', hex: '#007BFF' },
+    { name: 'azul marino', hex: '#000080' },
+    { name: 'azul claro', hex: '#87CEEB' },
+    { name: 'verde', hex: '#28A745' },
+    { name: 'verde oliva', hex: '#808000' },
+    { name: 'amarillo', hex: '#FFC107' },
+    { name: 'rosa', hex: '#E83E8C' },
+    { name: 'morado', hex: '#6F42C1' },
+    { name: 'marron', hex: '#795548' },
+    { name: 'beige', hex: '#F5F5DC' },
+    { name: 'naranja', hex: '#FD7E14' },
+    { name: 'coral', hex: '#FF7F50' },
+    { name: 'turquesa', hex: '#00CED1' },
 ];
 
 const AddGarmentScreen = ({ navigation, route }) => {
@@ -45,12 +52,29 @@ const AddGarmentScreen = ({ navigation, route }) => {
     const [notes, setNotes] = useState(existing?.notes || '');
     const [imageUri, setImageUri] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDetectingColor, setIsDetectingColor] = useState(false);
     const [showCustomInput, setShowCustomInput] = useState(false);
     const [customCategory, setCustomCategory] = useState('');
 
     const dispatch = useDispatch();
     const { theme } = useTheme();
     const c = theme.colors;
+
+    // Auto-detectar color de la imagen
+    const autoDetectColor = async (uri) => {
+        setIsDetectingColor(true);
+        try {
+            const data = await detectColorSvc(uri);
+            if (data.suggestedColor) {
+                setColor(data.suggestedColor);
+            }
+        } catch (err) {
+            // Silenciar error - el usuario puede elegir manualmente
+            console.log('Auto-detect color failed:', err.message);
+        } finally {
+            setIsDetectingColor(false);
+        }
+    };
 
     // Elegir imagen de la galería
     const pickImage = async () => {
@@ -68,7 +92,9 @@ const AddGarmentScreen = ({ navigation, route }) => {
         });
 
         if (!result.canceled) {
-            setImageUri(result.assets[0].uri);
+            const uri = result.assets[0].uri;
+            setImageUri(uri);
+            autoDetectColor(uri);
         }
     };
 
@@ -87,7 +113,9 @@ const AddGarmentScreen = ({ navigation, route }) => {
         });
 
         if (!result.canceled) {
-            setImageUri(result.assets[0].uri);
+            const uri = result.assets[0].uri;
+            setImageUri(uri);
+            autoDetectColor(uri);
         }
     };
 
@@ -279,19 +307,63 @@ const AddGarmentScreen = ({ navigation, route }) => {
 
                 {/* Color */}
                 <View style={styles.field}>
-                    <Text style={[styles.label, { color: c.textSecondary }]}>Color</Text>
-                    <View style={styles.colorGrid}>
-                        {COLORS.map((c2) => (
-                            <TouchableOpacity
-                                key={c2.name}
-                                style={[
-                                    styles.colorCircle,
-                                    { backgroundColor: c2.hex, borderColor: color === c2.name ? c.primary : 'transparent' },
-                                    color === c2.name && styles.colorSelected,
-                                ]}
-                                onPress={() => setColor(color === c2.name ? '' : c2.name)}
-                            />
-                        ))}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.label, { color: c.textSecondary, marginBottom: 0 }]}>Color</Text>
+                        {isDetectingColor && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <ActivityIndicator size="small" color={c.primary} />
+                                <Text style={{ fontSize: 12, color: c.textMuted }}>Detectando...</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Paleta circular */}
+                    <View style={styles.circularPalette}>
+                        {/* Centro: color seleccionado */}
+                        <View style={[
+                            styles.paletteCenter,
+                            {
+                                backgroundColor: color
+                                    ? (COLORS.find((cc) => cc.name === color)?.hex || c.surfaceVariant)
+                                    : c.surfaceVariant,
+                                borderColor: c.border,
+                            },
+                        ]}>
+                            {color ? (
+                                <Text style={[styles.paletteCenterText, {
+                                    color: ['negro', 'azul marino', 'morado', 'marron', 'verde oliva'].includes(color) ? '#FFF' : '#222',
+                                }]}>
+                                    {color}
+                                </Text>
+                            ) : (
+                                <Ionicons name="color-palette-outline" size={20} color={c.textMuted} />
+                            )}
+                        </View>
+
+                        {/* Circulos de color en anillo */}
+                        {COLORS.map((c2, i) => {
+                            const angle = (i / COLORS.length) * 2 * Math.PI - Math.PI / 2;
+                            const radius = 90;
+                            const x = Math.cos(angle) * radius;
+                            const y = Math.sin(angle) * radius;
+                            const isSelected = color === c2.name;
+
+                            return (
+                                <TouchableOpacity
+                                    key={c2.name}
+                                    style={[
+                                        styles.paletteCircle,
+                                        {
+                                            backgroundColor: c2.hex,
+                                            borderColor: isSelected ? c.primary : '#D1D5DB',
+                                            transform: [{ translateX: x }, { translateY: y }],
+                                        },
+                                        isSelected && styles.colorSelected,
+                                    ]}
+                                    onPress={() => setColor(color === c2.name ? '' : c2.name)}
+                                />
+                            );
+                        })}
                     </View>
                     {color ? (
                         <Text style={[styles.colorLabel, { color: c.textMuted }]}>
@@ -414,6 +486,20 @@ const styles = StyleSheet.create({
     customCategoryConfirm: { padding: 2 },
     customCategoryCancel: { padding: 2 },
     colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    circularPalette: {
+        width: 220, height: 220, alignSelf: 'center', marginVertical: 12,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    paletteCenter: {
+        width: 60, height: 60, borderRadius: 30, borderWidth: 2,
+        justifyContent: 'center', alignItems: 'center', zIndex: 10,
+    },
+    paletteCenterText: { fontSize: 10, fontWeight: '700', textAlign: 'center', textTransform: 'capitalize' },
+    paletteCircle: {
+        position: 'absolute', width: 30, height: 30, borderRadius: 15, borderWidth: 3,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2, shadowRadius: 2, elevation: 2,
+    },
     colorCircle: {
         width: 36, height: 36, borderRadius: 18, borderWidth: 3,
     },

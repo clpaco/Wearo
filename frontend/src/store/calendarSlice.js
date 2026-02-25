@@ -1,4 +1,4 @@
-// Slice del Calendario — Redux Toolkit
+// Slice del Calendario — multi-entry, auto-worn, solo hoy editable
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import * as calendarSvc from '../services/calendar.service';
 
@@ -15,44 +15,41 @@ export const fetchMonthEntries = createAsyncThunk(
     }
 );
 
-// Thunk: Asignar outfit a fecha
-export const assignOutfitToDate = createAsyncThunk(
-    'calendar/assign',
-    async ({ date, outfitId, notes }, { rejectWithValue }) => {
+// Thunk: Añadir entrada (outfit o prendas sueltas)
+export const addCalendarEntry = createAsyncThunk(
+    'calendar/addEntry',
+    async ({ date, outfitId, garmentIds, notes }, { rejectWithValue }) => {
         try {
-            const data = await calendarSvc.assignOutfit(date, outfitId, notes);
+            const data = await calendarSvc.addEntry(date, { outfitId, garmentIds, notes });
             return data.entrada;
         } catch (err) {
-            return rejectWithValue(err.response?.data?.mensaje || 'Error al asignar outfit');
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al añadir entrada');
         }
     }
 );
 
-// Thunk: Eliminar entrada
-export const removeEntry = createAsyncThunk(
-    'calendar/remove',
-    async (date, { rejectWithValue }) => {
+// Thunk: Eliminar entrada por ID
+export const removeCalendarEntry = createAsyncThunk(
+    'calendar/removeEntry',
+    async (entryId, { rejectWithValue }) => {
         try {
-            await calendarSvc.removeEntry(date);
-            return date;
+            const data = await calendarSvc.removeEntry(entryId);
+            return data.entryId;
         } catch (err) {
-            return rejectWithValue(err.response?.data?.mensaje || 'Error al eliminar');
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al eliminar entrada');
         }
     }
 );
 
-// Thunk: Marcar outfit como usado (incrementa times_worn)
-export const markOutfitWorn = createAsyncThunk(
-    'calendar/markWorn',
-    async (date, { rejectWithValue }) => {
-        try {
-            await calendarSvc.markOutfitWorn(date);
-            return date;
-        } catch (err) {
-            return rejectWithValue(err.response?.data?.mensaje || 'Error al marcar como usado');
-        }
+// Helper: ensure garments is always a parsed array
+const parseEntryGarments = (entry) => {
+    if (!entry) return entry;
+    if (typeof entry.garments === 'string') {
+        try { entry.garments = JSON.parse(entry.garments); } catch { entry.garments = []; }
     }
-);
+    if (!Array.isArray(entry.garments)) entry.garments = [];
+    return entry;
+};
 
 const calendarSlice = createSlice({
     name: 'calendar',
@@ -70,25 +67,19 @@ const calendarSlice = createSlice({
             .addCase(fetchMonthEntries.pending, (state) => { state.isLoading = true; state.error = null; })
             .addCase(fetchMonthEntries.fulfilled, (state, action) => {
                 state.isLoading = false;
-                state.entries = action.payload;
+                state.entries = (action.payload || []).map(parseEntryGarments);
             })
             .addCase(fetchMonthEntries.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload;
             })
-            .addCase(assignOutfitToDate.fulfilled, (state, action) => {
-                const idx = state.entries.findIndex((e) => e.date === action.payload.date);
-                if (idx !== -1) {
-                    state.entries[idx] = action.payload;
-                } else {
-                    state.entries.push(action.payload);
-                }
+            // Añadir entrada
+            .addCase(addCalendarEntry.fulfilled, (state, action) => {
+                state.entries.push(parseEntryGarments(action.payload));
             })
-            .addCase(removeEntry.fulfilled, (state, action) => {
-                state.entries = state.entries.filter((e) => {
-                    const entryDate = typeof e.date === 'string' ? e.date.split('T')[0] : e.date;
-                    return entryDate !== action.payload;
-                });
+            // Eliminar entrada por ID
+            .addCase(removeCalendarEntry.fulfilled, (state, action) => {
+                state.entries = state.entries.filter((e) => e.id !== action.payload);
             });
     },
 });

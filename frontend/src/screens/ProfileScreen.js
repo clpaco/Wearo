@@ -3,19 +3,25 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, Image, TouchableOpacity, FlatList,
     StyleSheet, ActivityIndicator, StatusBar, ScrollView,
-    RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
+    RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     fetchMyProfile, fetchUserProfile, fetchUserPosts,
     toggleFollow, fetchFollowers, fetchFollowing, clearViewedProfile,
+    toggleVisibility,
 } from '../store/profileSlice';
 import { fetchComments, addComment, removeComment, toggleLike } from '../store/socialSlice';
 import { logoutUser } from '../store/authSlice';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
+import { startConversation } from '../store/messagesSlice';
 import ScreenHeader from '../components/ScreenHeader';
+import GarmentCarousel from '../components/GarmentCarousel';
+import { getLikers } from '../services/social.service';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const StatBadge = ({ label, value, onPress, colors }) => (
     <TouchableOpacity style={styles.statBadge} onPress={onPress} disabled={!onPress}>
@@ -69,6 +75,8 @@ const ProfileScreen = ({ navigation, route }) => {
 
     const [listModal, setListModal] = useState(null);
     const [refreshing, setRefreshing]  = useState(false);
+    const [likers, setLikers] = useState([]);
+    const [showLikers, setShowLikers] = useState(false);
 
     // Post detail + comments
     const [selectedPost, setSelectedPost] = useState(null);
@@ -87,6 +95,15 @@ const ProfileScreen = ({ navigation, route }) => {
 
     useEffect(() => { load(); }, [load]);
 
+    // Fetch comments for posts so inline previews work
+    useEffect(() => {
+        viewedPosts.forEach((post) => {
+            if ((post.comment_count || 0) > 0 && !comments[post.id]) {
+                dispatch(fetchComments(post.id));
+            }
+        });
+    }, [viewedPosts, dispatch]);
+
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         Promise.all([
@@ -98,6 +115,21 @@ const ProfileScreen = ({ navigation, route }) => {
     const handleFollow = () => {
         if (!profile) return;
         dispatch(toggleFollow({ userId: profile.id, isFollowing: profile.is_following }));
+    };
+
+    const handleToggleVisibility = () => {
+        if (!profile) return;
+        const goingPublic = profile.is_public === false;
+        Alert.alert(
+            goingPublic ? 'Hacer perfil público' : 'Hacer perfil privado',
+            goingPublic
+                ? 'Tus publicaciones aparecerán en la pestaña Descubrir para todos los usuarios.'
+                : 'Tus publicaciones solo serán visibles para tus seguidores.',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Confirmar', onPress: () => dispatch(toggleVisibility(goingPublic)) },
+            ]
+        );
     };
 
     const openFollowers = () => {
@@ -134,6 +166,16 @@ const ProfileScreen = ({ navigation, route }) => {
         dispatch(removeComment({ postId: selectedPost.id, commentId }));
     };
 
+    const handleOpenLikers = async (postId) => {
+        try {
+            const data = await getLikers(postId);
+            setLikers(data.likers || []);
+            setShowLikers(true);
+        } catch {
+            setLikers([]);
+        }
+    };
+
     const handlePostLike = () => {
         if (!selectedPost) return;
         dispatch(toggleLike({ sharedId: selectedPost.id, isLiked: selectedPost.liked_by_me }));
@@ -158,25 +200,94 @@ const ProfileScreen = ({ navigation, route }) => {
     const modalList = listModal === 'followers' ? followers : following;
 
     const renderPost = ({ item: post }) => {
-        const thumb = post.garments?.[0]?.image_url;
+        const garments = post.garments || [];
+        const outfit = post.outfit || {};
+        const postCommentsList = comments[post.id] || [];
+
         return (
-            <TouchableOpacity
-                style={[styles.postThumb, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}
-                onPress={() => openPostDetail(post)}
-                activeOpacity={0.8}
-            >
-                {thumb ? (
-                    <Image source={{ uri: `${IMAGE_BASE_URL}${thumb}` }} style={styles.postThumbImg} />
-                ) : (
-                    <Ionicons name="albums-outline" size={26} color={c.textMuted} />
-                )}
-                <View style={[styles.postThumbOverlay, { backgroundColor: 'rgba(0,0,0,0.28)' }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                        <Ionicons name="heart" size={12} color="#FFF" />
-                        <Text style={styles.postThumbLike}>{post.like_count}</Text>
-                    </View>
+            <View style={[styles.postCard, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+                {/* Outfit info bar */}
+                <View style={[styles.postOutfitBar, { backgroundColor: c.surfaceVariant }]}>
+                    <Ionicons name="albums-outline" size={16} color={c.text} style={{ marginRight: 6 }} />
+                    <Text style={[styles.postOutfitName, { color: c.text }]} numberOfLines={1}>
+                        {outfit.name || post.outfit_name || 'Outfit'}
+                    </Text>
+                    {outfit.occasion && (
+                        <View style={[styles.postOccasionBadge, { backgroundColor: c.primary + '15' }]}>
+                            <Text style={[styles.postOccasionText, { color: c.primary }]}>{outfit.occasion}</Text>
+                        </View>
+                    )}
                 </View>
-            </TouchableOpacity>
+
+                {/* Garment carousel */}
+                {garments.length > 0 && (
+                    <TouchableOpacity activeOpacity={0.95} onPress={() => openPostDetail(post)}>
+                        <GarmentCarousel garments={garments} height={Math.round(SCREEN_W * 0.75)} />
+                    </TouchableOpacity>
+                )}
+
+                {/* Actions bar: like + comment */}
+                <View style={styles.postActionsBar}>
+                    <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        onPress={() => {
+                            dispatch(toggleLike({ sharedId: post.id, isLiked: post.liked_by_me }));
+                        }}
+                    >
+                        <Ionicons
+                            name={post.liked_by_me ? 'heart' : 'heart-outline'}
+                            size={24}
+                            color={post.liked_by_me ? c.error : c.text}
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        onPress={() => openPostDetail(post)}
+                    >
+                        <Ionicons name="chatbubble-outline" size={21} color={c.text} />
+                    </TouchableOpacity>
+                    <Text style={[styles.postGarmentCount, { color: c.textMuted }]}>
+                        {garments.length} prenda{garments.length !== 1 ? 's' : ''}
+                    </Text>
+                </View>
+
+                {/* Like count */}
+                {(post.like_count || 0) > 0 && (
+                    <TouchableOpacity onPress={() => handleOpenLikers(post.id)}>
+                        <Text style={[styles.postLikeCount, { color: c.text }]}>
+                            {post.like_count} Me gusta
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
+                {/* Caption */}
+                {post.caption ? (
+                    <Text style={[styles.postCaptionText, { color: c.text }]} numberOfLines={2}>
+                        {post.caption}
+                    </Text>
+                ) : null}
+
+                {/* Inline comments preview */}
+                {postCommentsList.length > 0 && (
+                    <View style={styles.postInlineComments}>
+                        {postCommentsList.slice(0, 2).map((cm) => (
+                            <View key={cm.id} style={styles.postInlineCommentRow}>
+                                <Text style={[styles.postCommentAuthor, { color: c.text }]}>
+                                    {cm.author?.fullName || 'Usuario'}
+                                </Text>
+                                <Text style={[styles.postCommentBody, { color: c.text }]}>
+                                    {' '}{cm.text}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* Time ago */}
+                <Text style={[styles.postTimeAgo, { color: c.textMuted }]}>
+                    {getTimeAgo(post.created_at)}
+                </Text>
+            </View>
         );
     };
 
@@ -188,20 +299,30 @@ const ProfileScreen = ({ navigation, route }) => {
             <ScreenHeader
                 title={isOwnProfile ? 'Mi Perfil' : (profile?.full_name || 'Perfil')}
                 onBack={!isOwnProfile ? () => navigation.goBack() : undefined}
+                leftAction={
+                    canEdit ? (
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('EditProfile')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons name="create-outline" size={26} color={c.primary} />
+                        </TouchableOpacity>
+                    ) : null
+                }
                 rightAction={
                     canEdit ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                             <TouchableOpacity
-                                onPress={() => navigation.navigate('EditProfile')}
+                                onPress={() => navigation.navigate('Messages')}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: c.primary }}>Editar</Text>
+                                <Ionicons name="chatbubbles-outline" size={24} color={c.text} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => dispatch(logoutUser())}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
-                                <Ionicons name="log-out-outline" size={22} color={c.error} />
+                                <Ionicons name="log-out-outline" size={24} color={c.error} />
                             </TouchableOpacity>
                         </View>
                     ) : null
@@ -211,9 +332,7 @@ const ProfileScreen = ({ navigation, route }) => {
             <FlatList
                 data={viewedPosts}
                 keyExtractor={(item) => item.id.toString()}
-                numColumns={3}
-                contentContainerStyle={styles.gridContent}
-                columnWrapperStyle={styles.gridRow}
+                contentContainerStyle={styles.feedContent}
                 renderItem={renderPost}
                 onEndReached={loadMorePosts}
                 onEndReachedThreshold={0.4}
@@ -235,27 +354,71 @@ const ProfileScreen = ({ navigation, route }) => {
                                 )}
                             </View>
                             <Text style={[styles.displayName, { color: c.text }]}>{displayName}</Text>
+                            {profile?.username ? (
+                                <Text style={[styles.username, { color: c.textMuted }]}>@{profile.username}</Text>
+                            ) : null}
                             {profile?.bio ? (
                                 <Text style={[styles.bio, { color: c.textSecondary }]}>{profile.bio}</Text>
                             ) : null}
 
-                            {!isOwnProfile && profile && (
+                            {/* Visibilidad público/privado */}
+                            {isOwnProfile && profile && (
                                 <TouchableOpacity
-                                    style={[
-                                        styles.followBtn,
-                                        { backgroundColor: profile.is_following ? 'transparent' : c.primary,
-                                          borderColor: c.primary },
-                                    ]}
-                                    onPress={handleFollow}
-                                    activeOpacity={0.8}
+                                    style={[styles.visibilityToggle, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                                    onPress={handleToggleVisibility}
+                                    activeOpacity={0.7}
                                 >
-                                    <Text style={[
-                                        styles.followBtnText,
-                                        { color: profile.is_following ? c.primary : '#FFF' },
-                                    ]}>
-                                        {profile.is_following ? 'Siguiendo' : 'Seguir'}
+                                    <Ionicons
+                                        name={profile.is_public !== false ? 'globe-outline' : 'lock-closed-outline'}
+                                        size={16}
+                                        color={profile.is_public !== false ? c.primary : c.textMuted}
+                                    />
+                                    <Text style={[styles.visibilityText, { color: profile.is_public !== false ? c.primary : c.textMuted }]}>
+                                        {profile.is_public !== false ? 'Perfil público' : 'Perfil privado'}
                                     </Text>
+                                    <Ionicons name="chevron-forward" size={14} color={c.textMuted} />
                                 </TouchableOpacity>
+                            )}
+
+                            {!isOwnProfile && profile && (
+                                <View style={styles.profileActions}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.followBtn,
+                                            { backgroundColor: profile.is_following ? 'transparent' : c.primary,
+                                              borderColor: c.primary },
+                                        ]}
+                                        onPress={handleFollow}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={[
+                                            styles.followBtnText,
+                                            { color: profile.is_following ? c.primary : '#FFF' },
+                                        ]}>
+                                            {profile.is_following ? 'Siguiendo' : 'Seguir'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.messageBtn, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                                        onPress={async () => {
+                                            const result = await dispatch(startConversation(profile.id));
+                                            if (result.payload?.id) {
+                                                navigation.navigate('Chat', {
+                                                    conversationId: result.payload.id,
+                                                    otherUser: {
+                                                        id: profile.id,
+                                                        fullName: profile.full_name,
+                                                        avatarUrl: profile.avatar_url,
+                                                    },
+                                                });
+                                            }
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="chatbubble-outline" size={16} color={c.text} />
+                                        <Text style={[styles.messageBtnText, { color: c.text }]}>Mensaje</Text>
+                                    </TouchableOpacity>
+                                </View>
                             )}
                         </View>
 
@@ -461,11 +624,55 @@ const ProfileScreen = ({ navigation, route }) => {
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Modal: Likers — quién dio like */}
+            <Modal visible={showLikers} animationType="slide" transparent onRequestClose={() => setShowLikers(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalBox, { backgroundColor: c.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: c.text }]}>Les gusta</Text>
+                            <TouchableOpacity onPress={() => setShowLikers(false)}>
+                                <Ionicons name="close" size={22} color={c.primary} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={likers}
+                            keyExtractor={(item, i) => `liker-${item.user?.id || i}`}
+                            ListEmptyComponent={
+                                <Text style={[styles.noPosts, { color: c.textMuted }]}>Nadie ha dado like aún.</Text>
+                            }
+                            renderItem={({ item }) => {
+                                const u = item.user || {};
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.userRow, { borderBottomColor: c.border }]}
+                                        onPress={() => {
+                                            setShowLikers(false);
+                                            if (String(u.id) === String(user?.id)) return;
+                                            navigation.navigate('UserProfile', { userId: u.id });
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={[styles.rowAvatar, { backgroundColor: c.primary + '20' }]}>
+                                            {u.avatarUrl ? (
+                                                <Image source={{ uri: `${IMAGE_BASE_URL}${u.avatarUrl}` }} style={styles.rowAvatarImg} />
+                                            ) : (
+                                                <Text style={[styles.rowAvatarText, { color: c.primary }]}>
+                                                    {(u.fullName || '?')[0].toUpperCase()}
+                                                </Text>
+                                            )}
+                                        </View>
+                                        <Text style={[styles.rowName, { color: c.text }]}>{u.fullName || 'Usuario'}</Text>
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
-
-const THUMB_SIZE = '33%';
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
@@ -479,12 +686,28 @@ const styles = StyleSheet.create({
     avatar: { width: 96, height: 96, borderRadius: 48 },
     avatarInitial: { fontSize: 40, fontWeight: '800' },
     displayName: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
+    username: { fontSize: 14, fontWeight: '500', marginBottom: 6 },
     bio: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 12 },
 
+    visibilityToggle: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1,
+        marginBottom: 12,
+    },
+    visibilityText: { fontSize: 13, fontWeight: '600' },
+
     followBtn: {
-        paddingHorizontal: 32, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5, marginTop: 4,
+        paddingHorizontal: 32, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5,
     },
     followBtnText: { fontSize: 15, fontWeight: '700' },
+    profileActions: {
+        flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4,
+    },
+    messageBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 1,
+    },
+    messageBtnText: { fontSize: 15, fontWeight: '600' },
 
     statsRow: {
         flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12,
@@ -499,18 +722,30 @@ const styles = StyleSheet.create({
         borderBottomWidth: 0.5, textTransform: 'uppercase', letterSpacing: 0.5,
     },
 
-    gridContent: { paddingBottom: 32 },
-    gridRow: { gap: 2 },
-    postThumb: {
-        width: THUMB_SIZE, aspectRatio: 1, justifyContent: 'center', alignItems: 'center',
-        borderWidth: 0.5, overflow: 'hidden',
-    },
-    postThumbImg: { width: '100%', height: '100%' },
-    postThumbOverlay: {
-        ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', padding: 4,
-    },
-    postThumbLike: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+    feedContent: { paddingBottom: 32 },
     noPosts: { textAlign: 'center', marginTop: 40, fontSize: 14 },
+
+    // Feed-style post cards
+    postCard: {
+        borderBottomWidth: 0.5, marginBottom: 4,
+    },
+    postOutfitBar: {
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8,
+    },
+    postOutfitName: { fontSize: 14, fontWeight: '700', flex: 1 },
+    postOccasionBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+    postOccasionText: { fontSize: 11, fontWeight: '600' },
+    postActionsBar: {
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, gap: 16,
+    },
+    postGarmentCount: { fontSize: 13, marginLeft: 'auto' },
+    postLikeCount: { fontSize: 14, fontWeight: '700', paddingHorizontal: 14, paddingTop: 4 },
+    postCaptionText: { fontSize: 14, lineHeight: 20, paddingHorizontal: 14, paddingTop: 4 },
+    postInlineComments: { paddingHorizontal: 14, paddingTop: 4 },
+    postInlineCommentRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 2 },
+    postCommentAuthor: { fontSize: 13, fontWeight: '700' },
+    postCommentBody: { fontSize: 13, lineHeight: 18, flexShrink: 1 },
+    postTimeAgo: { fontSize: 12, paddingHorizontal: 14, paddingTop: 2, paddingBottom: 12 },
 
     // Seguidores modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

@@ -7,11 +7,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { restoreSession } from '../store/authSlice';
+import { fetchMyProfile } from '../store/profileSlice';
 import { useTheme } from '../hooks/useTheme';
 
 // Pantallas
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import StatsScreen from '../screens/StatsScreen';
 import WardrobeScreen from '../screens/WardrobeScreen';
@@ -24,6 +26,8 @@ import CalendarScreen from '../screens/CalendarScreen';
 import SocialScreen from '../screens/SocialScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import MessagesScreen from '../screens/MessagesScreen';
+import ChatScreen from '../screens/ChatScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -68,6 +72,8 @@ const SocialStack = () => (
     <Stack.Navigator screenOptions={stackOptions}>
         <Stack.Screen name="SocialScreen" component={SocialScreen} />
         <Stack.Screen name="UserProfile" component={ProfileScreen} />
+        <Stack.Screen name="Messages" component={MessagesScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
 );
 
@@ -76,6 +82,8 @@ const ProfileStack = () => (
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
         <Stack.Screen name="UserProfile" component={ProfileScreen} />
+        <Stack.Screen name="Messages" component={MessagesScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
 );
 
@@ -100,7 +108,7 @@ const AppTabs = () => {
                 tabBarActiveTintColor: theme.colors.tabActive,
                 tabBarInactiveTintColor: theme.colors.tabInactive,
                 tabBarLabelStyle: {
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: '500',
                 },
                 tabBarIcon: ({ color, size, focused }) => {
@@ -112,7 +120,7 @@ const AppTabs = () => {
                         Social: focused ? 'people' : 'people-outline',
                         Perfil: focused ? 'person-circle' : 'person-circle-outline',
                     };
-                    return <Ionicons name={icons[route.name]} size={size} color={color} />;
+                    return <Ionicons name={icons[route.name]} size={22} color={color} />;
                 },
             })}
         >
@@ -148,12 +156,20 @@ const AuthStack = () => {
 
 const AppNavigator = () => {
     const dispatch = useDispatch();
-    const { isAuthenticated, isRestoringSession } = useSelector((state) => state.auth);
+    const { isAuthenticated, isRestoringSession, user } = useSelector((state) => state.auth);
+    const { myProfile } = useSelector((state) => state.profile);
     const { theme } = useTheme();
 
     useEffect(() => {
         dispatch(restoreSession());
     }, [dispatch]);
+
+    // Fetch profile when authenticated to check onboarding
+    useEffect(() => {
+        if (isAuthenticated) {
+            dispatch(fetchMyProfile());
+        }
+    }, [dispatch, isAuthenticated]);
 
     if (isRestoringSession) {
         return (
@@ -163,9 +179,20 @@ const AppNavigator = () => {
         );
     }
 
+    const needsOnboarding = isAuthenticated && myProfile && myProfile.onboarding_done === false;
+
     return (
         <NavigationContainer>
-            {isAuthenticated ? <AppTabs /> : <AuthStack />}
+            {!isAuthenticated ? (
+                <AuthStack />
+            ) : needsOnboarding ? (
+                <Stack.Navigator screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+                    <Stack.Screen name="AppTabs" component={AppTabs} />
+                </Stack.Navigator>
+            ) : (
+                <AppTabs />
+            )}
         </NavigationContainer>
     );
 };

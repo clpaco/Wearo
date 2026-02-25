@@ -54,6 +54,19 @@ export const removeGarment = createAsyncThunk(
     }
 );
 
+// Thunk: Toggle favorito
+export const toggleGarmentFavorite = createAsyncThunk(
+    'wardrobe/toggleFavorite',
+    async ({ id, isFavorite }, { rejectWithValue }) => {
+        try {
+            const data = await garmentsSvc.toggleFavorite(id, isFavorite);
+            return data.prenda;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al cambiar favorito');
+        }
+    }
+);
+
 const wardrobeSlice = createSlice({
     name: 'wardrobe',
     initialState: {
@@ -97,6 +110,11 @@ const wardrobeSlice = createSlice({
             // Remove
             .addCase(removeGarment.fulfilled, (state, action) => {
                 state.garments = state.garments.filter((g) => g.id !== action.payload);
+            })
+            // Toggle favorite
+            .addCase(toggleGarmentFavorite.fulfilled, (state, action) => {
+                const idx = state.garments.findIndex((g) => g.id === action.payload.id);
+                if (idx !== -1) state.garments[idx] = action.payload;
             });
     },
 });

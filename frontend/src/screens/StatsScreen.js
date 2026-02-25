@@ -162,10 +162,10 @@ const StatsScreen = ({ navigation }) => {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 {/* Tarjetas resumen */}
                 <View style={styles.overviewGrid}>
-                    <StatCard icon="shirt-outline" label="Prendas" value={overview.total_garments ?? 0} color="#6C5CE7" />
+                    <StatCard icon="shirt-outline" label="Prendas" value={overview.total_prendas ?? 0} color="#6C5CE7" />
                     <StatCard icon="albums-outline" label="Outfits" value={overview.total_outfits ?? 0} color="#00CEC9" />
-                    <StatCard icon="calendar-outline" label="Planificados" value={overview.total_planned ?? 0} color="#FDCB6E" />
-                    <StatCard icon="star" label="Favoritos" value={(parseInt(overview.favorite_garments || 0) + parseInt(overview.favorite_outfits || 0))} color="#E17055" />
+                    <StatCard icon="calendar-outline" label="Planificados" value={overview.outfits_planificados ?? 0} color="#FDCB6E" />
+                    <StatCard icon="star" label="Favoritos" value={(parseInt(overview.prendas_favoritas || 0) + parseInt(overview.favorite_outfits || 0))} color="#E17055" />
                 </View>
 
                 {/* Prendas por categoría */}

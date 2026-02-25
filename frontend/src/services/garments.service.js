@@ -78,8 +78,34 @@ export const deleteGarment = async (id) => {
     return data;
 };
 
+// Toggle favorito de una prenda
+export const toggleFavorite = async (id, isFavorite) => {
+    const formData = new FormData();
+    formData.append('isFavorite', String(isFavorite));
+    const { data } = await api.put(`/garments/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+};
+
 // Obtener categorías del usuario
 export const getCategories = async () => {
     const { data } = await api.get('/garments/categories');
+    return data;
+};
+
+// Detectar color dominante de una imagen
+export const detectColor = async (imageUri) => {
+    const formData = new FormData();
+    const filename = imageUri.split('/').pop();
+    const ext = filename.split('.').pop();
+    formData.append('image', {
+        uri: imageUri,
+        name: filename,
+        type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+    });
+    const { data } = await api.post('/garments/detect-color', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return data;
 };

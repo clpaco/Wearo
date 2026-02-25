@@ -47,6 +47,7 @@ app.use('/api/v1/stats', require('./routes/stats.routes'));
 app.use('/api/v1/social', require('./routes/social.routes'));
 app.use('/api/v1/users',  require('./routes/profile.routes'));
 app.use('/api/v1/ai',     require('./routes/ai.routes'));
+app.use('/api/v1/messages', require('./routes/messages.routes'));
 
 // Middleware de manejo de errores global
 app.use((err, req, res, next) => {

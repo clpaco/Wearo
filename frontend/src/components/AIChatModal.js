@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
     StyleSheet, Modal, KeyboardAvoidingView, Platform,
-    ActivityIndicator, StatusBar, Animated, Linking,
+    ActivityIndicator, StatusBar, Animated, Linking, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -71,6 +71,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
 
     const { chatMessages, shoppingRecs, isLoading, isShoppingLoading, error } = useSelector((s) => s.ai);
     const [input, setInput] = useState('');
+    const [shopQuery, setShopQuery] = useState('');
     const flatListRef = useRef(null);
     const isOutfits = mode === 'outfits';
 
@@ -100,8 +101,15 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
         dispatch(sendMessage({ messages: newMessages, city }));
     }, [input, chatMessages, isLoading, dispatch, city]);
 
+    const handleShopSearch = useCallback(() => {
+        const trimmed = shopQuery.trim();
+        if (!trimmed || isShoppingLoading) return;
+        dispatch(fetchShoppingRecs(trimmed));
+    }, [shopQuery, isShoppingLoading, dispatch]);
+
     const handleClose = () => {
         setInput('');
+        setShopQuery('');
         dispatch(clearAiError());
         onClose();
     };
@@ -109,6 +117,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
     const handleClear = () => {
         dispatch(clearChat());
         dispatch(clearShoppingRecs());
+        setShopQuery('');
     };
 
     // ── Render mensaje (modo outfits) ────────────────────────────────────────
@@ -145,8 +154,8 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
         );
     };
 
-    // ── Render tarjeta de producto (modo shopping) ─────────────────────────────
-    const renderShoppingCard = ({ item }) => {
+    // ── Render tarjeta de producto cuadrada (modo shopping, 2 columnas) ────────
+    const renderShoppingCard = ({ item, index }) => {
         const isError = item.category === 'error' || item.category === 'info';
         const bgColor = categoryColor(item.category);
         const iconName = categoryIcon(item.category);
@@ -157,7 +166,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
 
         if (isError) {
             return (
-                <View style={[styles.shopCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+                <View style={[styles.shopErrorCard, { backgroundColor: c.surface, borderColor: c.border }]}>
                     <Ionicons name="alert-circle-outline" size={24} color={c.error} />
                     <Text style={[styles.shopDesc, { color: c.textSecondary, flex: 1, marginLeft: 10 }]}>{item.description}</Text>
                 </View>
@@ -166,30 +175,36 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
 
         return (
             <TouchableOpacity
-                style={[styles.productCard, { backgroundColor: c.surface, borderColor: c.border }]}
+                style={[styles.squareCard, { backgroundColor: c.surface, borderColor: c.border }]}
                 onPress={handleOpenLink}
                 activeOpacity={item.searchUrl ? 0.7 : 1}
             >
-                {/* Imagen/icono del producto */}
-                <View style={[styles.productImgWrap, { backgroundColor: bgColor }]}>
-                    <Ionicons name={iconName} size={40} color={c.primary} />
-                </View>
+                {/* Imagen cuadrada */}
+                {item.imageUrl ? (
+                    <Image
+                        source={{ uri: item.imageUrl }}
+                        style={styles.squareImg}
+                        resizeMode="cover"
+                    />
+                ) : (
+                    <View style={[styles.squareImgFallback, { backgroundColor: bgColor }]}>
+                        <Ionicons name={iconName} size={36} color={c.primary} />
+                    </View>
+                )}
 
-                {/* Info del producto */}
-                <View style={styles.productInfo}>
-                    <Text style={[styles.productName, { color: c.text }]} numberOfLines={2}>{item.name}</Text>
-                    <Text style={[styles.productDesc, { color: c.textSecondary }]} numberOfLines={2}>{item.description}</Text>
-                    <Text style={[styles.productReason, { color: c.primary }]} numberOfLines={1}>
-                        <Ionicons name="bulb-outline" size={11} color={c.primary} /> {item.reason}
-                    </Text>
-
-                    {/* Botón ver en tiendas */}
-                    {item.searchUrl ? (
-                        <View style={[styles.shopLinkBtn, { backgroundColor: c.primary }]}>
-                            <Ionicons name="cart-outline" size={14} color="#FFF" />
-                            <Text style={styles.shopLinkText}>Ver en tiendas</Text>
+                {/* Info compacta debajo */}
+                <View style={styles.squareInfo}>
+                    <Text style={[styles.squareName, { color: c.text }]} numberOfLines={2}>{item.name}</Text>
+                    {item.estimatedPrice && (
+                        <Text style={[styles.squarePrice, { color: c.primary }]}>~{item.estimatedPrice} EUR</Text>
+                    )}
+                    <Text style={[styles.squareReason, { color: c.textSecondary }]} numberOfLines={2}>{item.reason}</Text>
+                    {item.searchUrl && (
+                        <View style={[styles.squareBtn, { backgroundColor: c.primary }]}>
+                            <Ionicons name="cart-outline" size={12} color="#FFF" />
+                            <Text style={styles.squareBtnText}>Ver en tiendas</Text>
                         </View>
-                    ) : null}
+                    )}
                 </View>
             </TouchableOpacity>
         );
@@ -199,8 +214,8 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
             <KeyboardAvoidingView
                 style={[styles.root, { backgroundColor: c.background }]}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
             >
                 <StatusBar barStyle={c.statusBar} />
 
@@ -299,7 +314,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                         </View>
                     </>
                 ) : (
-                    /* Modo shopping */
+                    /* Modo shopping — grid cuadrado + chat input */
                     <>
                         {isShoppingLoading ? (
                             <View style={styles.centeredLoad}>
@@ -313,12 +328,24 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 data={shoppingRecs}
                                 renderItem={renderShoppingCard}
                                 keyExtractor={(_, i) => i.toString()}
-                                contentContainerStyle={styles.shopList}
+                                numColumns={2}
+                                columnWrapperStyle={styles.gridRow}
+                                contentContainerStyle={styles.shopGrid}
                                 showsVerticalScrollIndicator={false}
                                 ListHeaderComponent={
                                     <Text style={[styles.shopHeader, { color: c.textSecondary }]}>
-                                        Basándome en tu armario actual, estas prendas completarían tus outfits:
+                                        Sugerencias personalizadas para tu armario:
                                     </Text>
+                                }
+                                ListFooterComponent={
+                                    <TouchableOpacity
+                                        style={[styles.loadMoreBtn, { borderColor: c.primary }]}
+                                        onPress={() => dispatch(fetchShoppingRecs(shopQuery.trim() || ''))}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="refresh-outline" size={16} color={c.primary} />
+                                        <Text style={[styles.loadMoreText, { color: c.primary }]}>Cargar mas</Text>
+                                    </TouchableOpacity>
                                 }
                             />
                         ) : (
@@ -335,6 +362,28 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 </TouchableOpacity>
                             </View>
                         )}
+
+                        {/* Input de búsqueda para shopping */}
+                        <View style={[styles.inputBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
+                            <TextInput
+                                style={[styles.textInput, { color: c.text, backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                                placeholder="Busca algo concreto… ej: vestido para boda"
+                                placeholderTextColor={c.textMuted}
+                                value={shopQuery}
+                                onChangeText={setShopQuery}
+                                maxLength={200}
+                                onSubmitEditing={handleShopSearch}
+                                returnKeyType="search"
+                            />
+                            <TouchableOpacity
+                                style={[styles.sendBtn, { backgroundColor: shopQuery.trim() && !isShoppingLoading ? c.primary : c.border }]}
+                                onPress={handleShopSearch}
+                                disabled={!shopQuery.trim() || isShoppingLoading}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="search" size={18} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
                     </>
                 )}
             </KeyboardAvoidingView>
@@ -384,26 +433,37 @@ const styles = StyleSheet.create({
     },
     sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
 
-    shopList: { padding: 16 },
-    shopHeader: { fontSize: 13, marginBottom: 16, lineHeight: 18 },
-    shopCard: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12 },
+    shopGrid: { padding: 12, paddingBottom: 4 },
+    gridRow: { justifyContent: 'space-between', marginBottom: 12 },
+    shopHeader: { fontSize: 13, marginBottom: 12, lineHeight: 18, paddingHorizontal: 4 },
+    shopErrorCard: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12 },
+    shopDesc: { fontSize: 13, lineHeight: 18 },
 
-    productCard: {
-        borderWidth: 1, borderRadius: 16, marginBottom: 14, overflow: 'hidden',
+    squareCard: {
+        width: '48%', borderWidth: 1, borderRadius: 14, overflow: 'hidden',
         shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
     },
-    productImgWrap: {
-        width: '100%', height: 100, justifyContent: 'center', alignItems: 'center',
+    squareImg: {
+        width: '100%', aspectRatio: 1,
     },
-    productInfo: { padding: 14, gap: 4 },
-    productName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
-    productDesc: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
-    productReason: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
-    shopLinkBtn: {
+    squareImgFallback: {
+        width: '100%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center',
+    },
+    squareInfo: { padding: 10, gap: 3 },
+    squareName: { fontSize: 13, fontWeight: '700', lineHeight: 17 },
+    squarePrice: { fontSize: 14, fontWeight: '800' },
+    squareReason: { fontSize: 11, lineHeight: 15 },
+    squareBtn: {
         flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, gap: 6, marginTop: 4,
+        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, gap: 4, marginTop: 4,
     },
-    shopLinkText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+    squareBtnText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+
+    loadMoreBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+        marginTop: 8, marginBottom: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1.5,
+    },
+    loadMoreText: { fontSize: 15, fontWeight: '700' },
 
     centeredLoad: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
     loadingText: { marginTop: 16, fontSize: 14, textAlign: 'center' },

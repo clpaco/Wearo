@@ -23,7 +23,12 @@ const StatCard = ({ value, label, icon, color, style }) => {
             <Text style={[styles.value, { color: color || theme.colors.primary }]}>
                 {value ?? '–'}
             </Text>
-            <Text style={[styles.label, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+            <Text
+                style={[styles.label, { color: theme.colors.textSecondary }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+            >
                 {label}
             </Text>
         </View>

@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchGarments, removeGarment, setFilter } from '../store/wardrobeSlice';
+import { fetchGarments, removeGarment, setFilter, toggleGarmentFavorite } from '../store/wardrobeSlice';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
@@ -41,7 +41,7 @@ const SEASONS = [
 const WardrobeScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { garments, isLoading, activeFilter } = useSelector((state) => state.wardrobe);
-    const { theme, isDark, toggleTheme } = useTheme();
+    const { theme } = useTheme();
     const c = theme.colors;
     const [refreshing, setRefreshing] = useState(false);
     const [activeSeason, setActiveSeason] = useState(null);
@@ -124,12 +124,28 @@ const WardrobeScreen = ({ navigation }) => {
                 {item.brand && (
                     <Text style={[styles.garmentBrand, { color: c.textMuted }]}>{item.brand}</Text>
                 )}
+                {item.last_worn ? (
+                    <Text style={[styles.garmentLastWorn, { color: c.textMuted }]}>
+                        Usado: {new Date(item.last_worn + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                    </Text>
+                ) : item.times_worn > 0 ? (
+                    <Text style={[styles.garmentLastWorn, { color: c.textMuted }]}>Usado {item.times_worn}x</Text>
+                ) : null}
             </View>
-            {item.is_favorite && (
-                <View style={styles.favBadge}>
-                    <Ionicons name="heart" size={18} color={c.error || '#E17055'} />
-                </View>
-            )}
+            <TouchableOpacity
+                style={styles.favToggle}
+                onPress={(e) => {
+                    e.stopPropagation?.();
+                    dispatch(toggleGarmentFavorite({ id: item.id, isFavorite: !item.is_favorite }));
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+                <Ionicons
+                    name={item.is_favorite ? 'heart' : 'heart-outline'}
+                    size={22}
+                    color={item.is_favorite ? (c.error || '#E17055') : c.textMuted}
+                />
+            </TouchableOpacity>
         </TouchableOpacity>
     );
 
@@ -162,12 +178,6 @@ const WardrobeScreen = ({ navigation }) => {
                                 size={18}
                                 color={showFavoritesOnly ? (c.error || '#E17055') : c.textSecondary}
                             />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.themeBtn, { backgroundColor: c.surfaceVariant }]}
-                            onPress={toggleTheme}
-                        >
-                            <Ionicons name={isDark ? 'sunny' : 'moon'} size={18} color={c.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.addBtn, { backgroundColor: c.primary }]}
@@ -318,7 +328,9 @@ const styles = StyleSheet.create({
     garmentName: { fontSize: 16, fontWeight: '700' },
     garmentCategory: { fontSize: 13, fontWeight: '600', marginTop: 2, textTransform: 'capitalize' },
     garmentBrand: { fontSize: 12, marginTop: 2 },
+    garmentLastWorn: { fontSize: 11, marginTop: 2 },
     favBadge: { position: 'absolute', top: 8, right: 8 },
+    favToggle: { position: 'absolute', top: 8, right: 8, padding: 4 },
 });
 
 export default WardrobeScreen;

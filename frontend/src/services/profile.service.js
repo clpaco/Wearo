@@ -8,8 +8,8 @@ export const getMyProfile = async () => {
 };
 
 // Actualizar mi perfil
-export const updateMyProfile = async ({ fullName, bio }) => {
-    const { data } = await api.put('/users/me', { fullName, bio });
+export const updateMyProfile = async (fields) => {
+    const { data } = await api.put('/users/me', fields);
     return data;
 };
 

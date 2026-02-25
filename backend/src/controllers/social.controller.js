@@ -1,7 +1,7 @@
 // Controlador Social — feed público, compartir outfits y likes
 const socialModel = require('../models/social.model');
 
-// POST /api/v1/social/share — Compartir outfit al feed público
+// POST /api/v1/social/share — Compartir outfit al feed público (con fotos opcionales)
 const share = async (req, res) => {
     try {
         const { outfitId, caption } = req.body;
@@ -14,7 +14,10 @@ const share = async (req, res) => {
             return res.status(409).json({ error: true, mensaje: 'Este outfit ya está compartido' });
         }
 
-        const post = await socialModel.shareOutfit(req.user.id, outfitId, caption || '');
+        // Recoger rutas de fotos subidas por multer
+        const photos = (req.files || []).map((f) => `/uploads/social/${f.filename}`);
+
+        const post = await socialModel.shareOutfit(req.user.id, outfitId, caption || '', photos);
         res.status(201).json({ mensaje: 'Outfit compartido al feed', post });
     } catch (err) {
         console.error('Error compartiendo outfit:', err);
@@ -41,7 +44,8 @@ const getFeed = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit, 10) || 20;
         const offset = parseInt(req.query.offset, 10) || 0;
-        const posts = await socialModel.getFeed(req.user.id, { limit, offset });
+        const mode = req.query.mode === 'following' ? 'following' : 'discover';
+        const posts = await socialModel.getFeed(req.user.id, { limit, offset, mode });
         res.json({ posts, hasMore: posts.length === limit });
     } catch (err) {
         console.error('Error obteniendo feed:', err);
@@ -84,7 +88,36 @@ const unlike = async (req, res) => {
     }
 };
 
-module.exports = { share, unshare, getFeed, getMine, like, unlike, getComments, addComment, deleteComment };
+// GET /api/v1/social/:id/likers — Lista de quien dio like
+const getLikers = async (req, res) => {
+    try {
+        const likers = await socialModel.getLikers(req.params.id);
+        res.json({ likers });
+    } catch (err) {
+        console.error('Error obteniendo likers:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al obtener likes' });
+    }
+};
+
+module.exports = { share, unshare, getFeed, getMine, like, unlike, getLikers, getComments, addComment, deleteComment, search };
+
+// GET /api/v1/social/search?q=... — Buscar publicaciones y usuarios
+async function search(req, res) {
+    try {
+        const q = (req.query.q || '').trim();
+        if (!q || q.length < 2) {
+            return res.json({ posts: [], users: [] });
+        }
+        const [posts, users] = await Promise.all([
+            socialModel.searchPosts(req.user.id, q, 20),
+            socialModel.searchUsers(q, 10),
+        ]);
+        res.json({ posts, users });
+    } catch (err) {
+        console.error('Error buscando:', err);
+        res.status(500).json({ error: true, mensaje: 'Error en la búsqueda' });
+    }
+}
 
 // GET /api/v1/social/:id/comments — Obtener comentarios de un post
 async function getComments(req, res) {

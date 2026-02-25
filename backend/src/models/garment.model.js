@@ -15,28 +15,34 @@ const create = async (userId, garmentData) => {
 
 // Obtener todas las prendas de un usuario (con filtros opcionales)
 const findAllByUser = async (userId, filters = {}) => {
-    let sql = 'SELECT * FROM garments WHERE user_id = $1';
+    let sql = `SELECT g.*,
+        (SELECT MAX(ce.date) FROM calendar_entries ce
+         WHERE ce.user_id = g.user_id
+           AND (g.id = ANY(ce.garment_ids)
+                OR ce.outfit_id IN (SELECT og.outfit_id FROM outfit_garments og WHERE og.garment_id = g.id))
+        ) AS last_worn
+    FROM garments g WHERE g.user_id = $1`;
     const params = [userId];
     let paramIdx = 2;
 
     if (filters.category) {
-        sql += ` AND category = $${paramIdx++}`;
+        sql += ` AND g.category = $${paramIdx++}`;
         params.push(filters.category);
     }
     if (filters.color) {
-        sql += ` AND color = $${paramIdx++}`;
+        sql += ` AND g.color = $${paramIdx++}`;
         params.push(filters.color);
     }
     if (filters.season) {
-        sql += ` AND season = $${paramIdx++}`;
+        sql += ` AND g.season = $${paramIdx++}`;
         params.push(filters.season);
     }
     if (filters.isFavorite !== undefined) {
-        sql += ` AND is_favorite = $${paramIdx++}`;
+        sql += ` AND g.is_favorite = $${paramIdx++}`;
         params.push(filters.isFavorite);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    sql += ' ORDER BY g.created_at DESC';
 
     const result = await query(sql, params);
     return result.rows;

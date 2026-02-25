@@ -50,7 +50,8 @@ const findAllByUser = async (userId, filters = {}) => {
             'color', g.color, 'image_url', g.image_url
           ) ORDER BY og.position
         ) FILTER (WHERE g.id IS NOT NULL), '[]'
-      ) AS garments
+      ) AS garments,
+      (SELECT MAX(ce.date) FROM calendar_entries ce WHERE ce.user_id = o.user_id AND ce.outfit_id = o.id) AS last_worn
     FROM outfits o
     LEFT JOIN outfit_garments og ON o.id = og.outfit_id
     LEFT JOIN garments g ON og.garment_id = g.id

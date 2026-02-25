@@ -14,8 +14,8 @@ export const sendChatMessage = async (messages, options = {}) => {
     return data; // { reply: string }
 };
 
-// Obtener recomendaciones de prendas para comprar (Perplexity)
-export const getShoppingRecs = async () => {
-    const { data } = await api.post('/ai/shopping');
-    return data; // { recommendations: [{name, description, reason, category}] }
+// Obtener recomendaciones de prendas para comprar (Gemini)
+export const getShoppingRecs = async (query = '') => {
+    const { data } = await api.post('/ai/shopping', query ? { query } : {});
+    return data; // { recommendations: [{name, description, reason, category, estimatedPrice, imageUrl, searchUrl}] }
 };

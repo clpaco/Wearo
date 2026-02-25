@@ -32,9 +32,9 @@ export const sendMessage = createAsyncThunk(
 // Thunk: recomendaciones de compra
 export const fetchShoppingRecs = createAsyncThunk(
     'ai/shoppingRecs',
-    async (_, { rejectWithValue }) => {
+    async (query = '', { rejectWithValue }) => {
         try {
-            const data = await aiSvc.getShoppingRecs();
+            const data = await aiSvc.getShoppingRecs(query);
             return data.recommendations;
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al obtener sugerencias');

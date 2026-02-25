@@ -275,7 +275,7 @@ const HomeScreen = ({ navigation }) => {
                     <View style={{ width: 10 }} />
                     <StatCard value={resumen?.total_outfits} label="Outfits" icon="albums-outline" color={c.accent} />
                     <View style={{ width: 10 }} />
-                    <StatCard value={resumen?.prendas_favoritas} label="Favoritos" icon="heart" color={c.error} />
+                    <StatCard value={(parseInt(resumen?.prendas_favoritas || 0) + parseInt(resumen?.favorite_outfits || 0))} label="Favoritos" icon="heart" color={c.error} />
                     <View style={{ width: 10 }} />
                     <StatCard value={resumen?.outfits_planificados} label="Planificados" icon="calendar-outline" color={c.warning} />
                 </View>

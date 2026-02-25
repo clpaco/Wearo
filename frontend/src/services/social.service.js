@@ -2,8 +2,8 @@
 import api from './api';
 
 // Obtener feed público
-export const getFeed = async (limit = 20, offset = 0) => {
-    const { data } = await api.get(`/social/feed?limit=${limit}&offset=${offset}`);
+export const getFeed = async (limit = 20, offset = 0, mode = 'discover') => {
+    const { data } = await api.get(`/social/feed?limit=${limit}&offset=${offset}&mode=${mode}`);
     return data;
 };
 
@@ -13,9 +13,22 @@ export const getMyShared = async () => {
     return data;
 };
 
-// Compartir outfit al feed
-export const shareOutfit = async (outfitId, caption) => {
-    const { data } = await api.post('/social/share', { outfitId, caption });
+// Compartir outfit al feed (con fotos opcionales)
+export const shareOutfit = async (outfitId, caption, photos = []) => {
+    const formData = new FormData();
+    formData.append('outfitId', outfitId);
+    formData.append('caption', caption || '');
+    photos.forEach((uri, i) => {
+        const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+        formData.append('photos', {
+            uri,
+            name: `photo_${i}.${ext}`,
+            type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+        });
+    });
+    const { data } = await api.post('/social/share', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return data;
 };
 
@@ -55,4 +68,20 @@ export const postComment = async (postId, text) => {
 export const deleteComment = async (postId, commentId) => {
     const { data } = await api.delete(`/social/${postId}/comments/${commentId}`);
     return data;
+};
+
+// ── Likers ───────────────────────────────────────────
+
+// Obtener quiénes dieron like a un post
+export const getLikers = async (postId) => {
+    const { data } = await api.get(`/social/${postId}/likers`);
+    return data;
+};
+
+// ── Búsqueda ─────────────────────────────────────────
+
+// Buscar publicaciones y usuarios
+export const searchSocial = async (query) => {
+    const { data } = await api.get(`/social/search?q=${encodeURIComponent(query)}`);
+    return data; // { posts: [], users: [] }
 };

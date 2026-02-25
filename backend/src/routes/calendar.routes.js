@@ -6,10 +6,9 @@ const {
     getRange,
     getByDate,
     assign,
-    remove,
+    removeEntry,
     getWeather,
     getForecast,
-    markWorn,
 } = require('../controllers/calendar.controller');
 
 // Todas las rutas requieren autenticación
@@ -24,16 +23,13 @@ router.get('/forecast', getForecast);
 // GET /api/v1/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD — Entradas del mes
 router.get('/', getRange);
 
-// GET /api/v1/calendar/:date — Detalle de un día
+// GET /api/v1/calendar/:date — Entradas de un día
 router.get('/:date', getByDate);
 
-// POST /api/v1/calendar — Asignar outfit a fecha
+// POST /api/v1/calendar — Añadir entrada (outfit o prendas sueltas)
 router.post('/', assign);
 
-// DELETE /api/v1/calendar/:date — Eliminar entrada
-router.delete('/:date', remove);
-
-// POST /api/v1/calendar/:date/worn — Marcar outfit como usado
-router.post('/:date/worn', markWorn);
+// DELETE /api/v1/calendar/entry/:id — Eliminar entrada por ID
+router.delete('/entry/:id', removeEntry);
 
 module.exports = router;

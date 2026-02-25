@@ -42,9 +42,9 @@ export const fetchUserPosts = createAsyncThunk(
 
 export const updateMyProfile = createAsyncThunk(
     'profile/updateMe',
-    async ({ fullName, bio }, { rejectWithValue }) => {
+    async (fields, { rejectWithValue }) => {
         try {
-            const data = await profileSvc.updateMyProfile({ fullName, bio });
+            const data = await profileSvc.updateMyProfile(fields);
             return data.profile;
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al actualizar perfil');
@@ -74,6 +74,18 @@ export const toggleFollow = createAsyncThunk(
             return { userId, is_following: data.is_following, follower_count: data.follower_count };
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al seguir');
+        }
+    }
+);
+
+export const toggleVisibility = createAsyncThunk(
+    'profile/toggleVisibility',
+    async (isPublic, { rejectWithValue }) => {
+        try {
+            const data = await profileSvc.updateMyProfile({ isPublic });
+            return data.profile;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al cambiar visibilidad');
         }
     }
 );
@@ -160,6 +172,11 @@ const profileSlice = createSlice({
                     state.viewedProfile.is_following   = payload.is_following;
                     state.viewedProfile.follower_count = payload.follower_count;
                 }
+            })
+
+            // toggleVisibility
+            .addCase(toggleVisibility.fulfilled, (state, { payload }) => {
+                state.myProfile = { ...state.myProfile, ...payload };
             })
 
             // followers / following

@@ -10,6 +10,7 @@ const {
     update,
     remove,
     getCategories,
+    detectColor,
 } = require('../controllers/garments.controller');
 
 // Todas las rutas requieren autenticación
@@ -17,6 +18,9 @@ router.use(verifyToken);
 
 // GET /api/v1/garments/categories — Categorías (antes de :id para evitar conflicto)
 router.get('/categories', getCategories);
+
+// POST /api/v1/garments/detect-color — Detectar color dominante (antes de :id)
+router.post('/detect-color', upload.single('image'), detectColor);
 
 // GET /api/v1/garments — Listar prendas (con filtros query: ?category=&color=&season=&favorite=)
 router.get('/', getAll);

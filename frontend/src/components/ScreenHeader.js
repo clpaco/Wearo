@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
 
-const ScreenHeader = ({ title, subtitle, onBack, rightAction }) => {
+const ScreenHeader = ({ title, subtitle, onBack, rightAction, leftAction }) => {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
 
@@ -22,13 +22,13 @@ const ScreenHeader = ({ title, subtitle, onBack, rightAction }) => {
             ]}
         >
             <View style={styles.row}>
-                {/* Botón back */}
+                {/* Botón back o acción izquierda */}
                 <View style={styles.leftSlot}>
-                    {onBack && (
+                    {onBack ? (
                         <TouchableOpacity onPress={onBack} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                             <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
                         </TouchableOpacity>
-                    )}
+                    ) : leftAction || null}
                 </View>
 
                 {/* Título */}
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
         minHeight: 44,
     },
     leftSlot: {
-        width: 40,
+        minWidth: 40,
         alignItems: 'flex-start',
     },
     centerSlot: {
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     rightSlot: {
-        width: 40,
+        minWidth: 40,
         alignItems: 'flex-end',
     },
     backBtn: {

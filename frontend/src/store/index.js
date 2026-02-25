@@ -8,6 +8,7 @@ import statsReducer from './statsSlice';
 import socialReducer from './socialSlice';
 import profileReducer from './profileSlice';
 import aiReducer from './aiSlice';
+import messagesReducer from './messagesSlice';
 
 const store = configureStore({
     reducer: {
@@ -19,6 +20,7 @@ const store = configureStore({
         social: socialReducer,
         profile: profileReducer,
         ai: aiReducer,
+        messages: messagesReducer,
     },
 });
 

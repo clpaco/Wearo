@@ -4,6 +4,7 @@ const axios = require('axios');
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const HF_KEY = process.env.HUGGINGFACE_API_KEY || '';
+const SERPER_KEY = process.env.SERPER_API_KEY || '';
 const MODEL_NAME = 'gemini-2.0-flash';
 const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.2';
 
@@ -13,6 +14,8 @@ if (!GEMINI_KEY && !HF_KEY) {
     if (GEMINI_KEY) console.log('[AI] Gemini configurado con modelo:', MODEL_NAME);
     if (HF_KEY) console.log('[AI] HuggingFace configurado como fallback con modelo:', HF_MODEL);
 }
+if (SERPER_KEY) console.log('[AI] Serper.dev configurado para imagenes de productos');
+else console.warn('[AI] SERPER_API_KEY no configurada — sin imagenes de producto. Consigue una gratis en serper.dev');
 
 // ── Helpers de contexto ──────────────────────────────────────────────────────
 
@@ -234,9 +237,46 @@ const addSearchUrls = (items) =>
         searchUrl: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.name)}`,
     }));
 
+// ── Serper.dev: buscar imagen real de producto via Google Images ──────────────
+const fetchProductImage = async (query) => {
+    if (!SERPER_KEY) return null;
+    try {
+        const res = await axios.post(
+            'https://google.serper.dev/images',
+            { q: `${query} ropa comprar`, num: 3 },
+            {
+                headers: { 'X-API-KEY': SERPER_KEY, 'Content-Type': 'application/json' },
+                timeout: 5000,
+            }
+        );
+        // Pick the first image that has a reasonable URL
+        const images = res.data?.images || [];
+        const img = images.find((i) => i.imageUrl && !i.imageUrl.includes('x-raw-image'));
+        return img?.imageUrl || images[0]?.imageUrl || null;
+    } catch (err) {
+        console.warn('[AI] Serper image search failed:', err.message);
+        return null;
+    }
+};
+
+// ── Enriquecer recomendaciones con imagenes reales y searchUrl ────────────────
+const enrichWithImages = async (items) => {
+    const enriched = await Promise.all(
+        items.map(async (item) => {
+            const imageUrl = await fetchProductImage(item.name);
+            return {
+                ...item,
+                imageUrl: imageUrl || null,
+                searchUrl: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.name)}`,
+            };
+        })
+    );
+    return enriched;
+};
+
 // ── Recomendar prendas para comprar ──────────────────────────────────────────
 
-const recommendPurchases = async ({ garments = [] }) => {
+const recommendPurchases = async ({ garments = [], query = '', gender = '' }) => {
     if (!GEMINI_KEY && !HF_KEY) {
         return [{ name: 'Sin API key', description: 'Configura GEMINI_API_KEY o HUGGINGFACE_API_KEY en el .env del backend', reason: '', category: 'info', searchUrl: '' }];
     }
@@ -250,9 +290,19 @@ const recommendPurchases = async ({ garments = [] }) => {
         .map(([cat, count]) => `${cat}: ${count} prenda(s)`)
         .join(', ');
 
-    const prompt = wardrobeSummary
-        ? `Eres un estilista. El usuario tiene: ${wardrobeSummary}. Recomienda 5 prendas concretas para comprar (nombre de producto real con marca si es posible). Responde SOLO con JSON, sin texto extra. Formato: [{"name":"Pantalon chino Zara beige","description":"Versatil para combinar","reason":"Te falta un pantalon neutro","category":"pantalones"}]`
-        : `Eres un estilista. El usuario no tiene ropa. Recomienda 5 prendas basicas esenciales (nombres concretos con marca). Responde SOLO con JSON, sin texto extra. Formato: [{"name":"Camiseta basica blanca Uniqlo","description":"Esencial para cualquier armario","reason":"Base de todo outfit","category":"camisetas"}]`;
+    const genderHint = gender === 'hombre'
+        ? ' El usuario es HOMBRE. Recomienda SOLO ropa de hombre (nada de vestidos, faldas ni ropa femenina).'
+        : gender === 'mujer'
+            ? ' La usuaria es MUJER. Recomienda ropa de mujer.'
+            : '';
+
+    const userContext = query
+        ? `El usuario busca: "${query}". Teniendo en cuenta su armario (${wardrobeSummary || 'vacio'}), recomienda 5 prendas concretas relacionadas con lo que pide (nombre de producto real con marca si es posible). Incluye un precio estimado en euros.`
+        : wardrobeSummary
+            ? `El usuario tiene: ${wardrobeSummary}. Recomienda 5 prendas concretas para comprar (nombre de producto real con marca si es posible). Incluye un precio estimado en euros.`
+            : `El usuario no tiene ropa. Recomienda 5 prendas basicas esenciales (nombres concretos con marca). Incluye un precio estimado en euros.`;
+
+    const prompt = `Eres un estilista.${genderHint} ${userContext} Responde SOLO con JSON, sin texto extra. Formato: [{"name":"Pantalon chino Zara beige","description":"Versatil para combinar","reason":"Te falta un pantalon neutro","category":"pantalones","estimatedPrice":"29.99"}]`;
 
     // Try Gemini first
     let geminiError = '';
@@ -263,7 +313,7 @@ const recommendPurchases = async ({ garments = [] }) => {
             const text = result.response.text().trim();
             const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             const parsed = JSON.parse(clean);
-            return Array.isArray(parsed) ? addSearchUrls(parsed.slice(0, 5)) : [];
+            return Array.isArray(parsed) ? await enrichWithImages(parsed.slice(0, 5)) : [];
         } catch (err) {
             geminiError = err.message;
             console.error('[AI] Gemini shopping falló:', err.message);
@@ -283,14 +333,14 @@ const recommendPurchases = async ({ garments = [] }) => {
             if (arrayMatch) {
                 try {
                     const parsed = JSON.parse(arrayMatch[0]);
-                    if (Array.isArray(parsed) && parsed.length > 0) return addSearchUrls(parsed.slice(0, 5));
+                    if (Array.isArray(parsed) && parsed.length > 0) return await enrichWithImages(parsed.slice(0, 5));
                 } catch (_) { /* try next */ }
             }
 
             // Try full response as JSON
             try {
                 const parsed = JSON.parse(clean);
-                if (Array.isArray(parsed)) return addSearchUrls(parsed.slice(0, 5));
+                if (Array.isArray(parsed)) return await enrichWithImages(parsed.slice(0, 5));
             } catch (_) { /* try next */ }
 
             // Last resort: extract individual JSON objects
@@ -300,7 +350,7 @@ const recommendPurchases = async ({ garments = [] }) => {
             while ((m = objRegex.exec(clean)) !== null) {
                 try { objects.push(JSON.parse(m[0])); } catch (_) { /* skip */ }
             }
-            if (objects.length > 0) return addSearchUrls(objects.slice(0, 5));
+            if (objects.length > 0) return await enrichWithImages(objects.slice(0, 5));
 
             hfError = 'Respuesta no tiene formato JSON valido';
         } catch (err) {

@@ -35,3 +35,9 @@ export const deleteOutfit = async (id) => {
     const { data } = await api.delete(`/outfits/${id}`);
     return data;
 };
+
+// Toggle favorito de un outfit
+export const toggleFavorite = async (id, isFavorite) => {
+    const { data } = await api.put(`/outfits/${id}`, { isFavorite });
+    return data;
+};

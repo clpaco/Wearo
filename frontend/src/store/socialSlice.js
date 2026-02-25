@@ -5,22 +5,22 @@ import * as socialSvc from '../services/social.service';
 // Thunk: Obtener feed público
 export const fetchFeed = createAsyncThunk(
     'social/fetchFeed',
-    async ({ limit = 20, offset = 0 } = {}, { rejectWithValue }) => {
+    async ({ limit = 20, offset = 0, mode = 'discover' } = {}, { rejectWithValue }) => {
         try {
-            const data = await socialSvc.getFeed(limit, offset);
-            return { posts: data.posts, hasMore: data.hasMore, offset };
+            const data = await socialSvc.getFeed(limit, offset, mode);
+            return { posts: data.posts, hasMore: data.hasMore, offset, mode };
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al cargar el feed');
         }
     }
 );
 
-// Thunk: Compartir outfit
+// Thunk: Compartir outfit (con fotos opcionales)
 export const shareOutfit = createAsyncThunk(
     'social/share',
-    async ({ outfitId, caption }, { rejectWithValue }) => {
+    async ({ outfitId, caption, photos = [] }, { rejectWithValue }) => {
         try {
-            const data = await socialSvc.shareOutfit(outfitId, caption);
+            const data = await socialSvc.shareOutfit(outfitId, caption, photos);
             return data.post;
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al compartir');

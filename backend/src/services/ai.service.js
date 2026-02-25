@@ -227,11 +227,18 @@ REGLAS:
     return `Error de IA: ${details || 'Verifica las API keys en .env y reinicia el backend.'}`;
 };
 
-// ── Gemini: recomendar prendas para comprar ──────────────────────────────────
+// ── Helper: añadir searchUrl a cada recomendacion ────────────────────────────
+const addSearchUrls = (items) =>
+    items.map((item) => ({
+        ...item,
+        searchUrl: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.name)}`,
+    }));
+
+// ── Recomendar prendas para comprar ──────────────────────────────────────────
 
 const recommendPurchases = async ({ garments = [] }) => {
     if (!GEMINI_KEY && !HF_KEY) {
-        return [{ name: 'Sin API key', description: 'Configura GEMINI_API_KEY o HUGGINGFACE_API_KEY en el .env del backend', reason: '', category: 'info' }];
+        return [{ name: 'Sin API key', description: 'Configura GEMINI_API_KEY o HUGGINGFACE_API_KEY en el .env del backend', reason: '', category: 'info', searchUrl: '' }];
     }
 
     const categories = {};
@@ -256,7 +263,7 @@ const recommendPurchases = async ({ garments = [] }) => {
             const text = result.response.text().trim();
             const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             const parsed = JSON.parse(clean);
-            return Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+            return Array.isArray(parsed) ? addSearchUrls(parsed.slice(0, 5)) : [];
         } catch (err) {
             geminiError = err.message;
             console.error('[AI] Gemini shopping falló:', err.message);
@@ -268,18 +275,33 @@ const recommendPurchases = async ({ garments = [] }) => {
     if (HF_KEY) {
         try {
             const text = await hfGenerate(prompt, 800);
-            console.log('[AI] HuggingFace shopping raw:', text.substring(0, 200));
+            console.log('[AI] HuggingFace shopping raw:', text.substring(0, 300));
             const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+            // Try multiple parsing strategies
             const arrayMatch = clean.match(/\[[\s\S]*?\]/);
             if (arrayMatch) {
-                const parsed = JSON.parse(arrayMatch[0]);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
+                try {
+                    const parsed = JSON.parse(arrayMatch[0]);
+                    if (Array.isArray(parsed) && parsed.length > 0) return addSearchUrls(parsed.slice(0, 5));
+                } catch (_) { /* try next */ }
             }
-            // If no JSON array found, try to parse the whole response
+
+            // Try full response as JSON
             try {
                 const parsed = JSON.parse(clean);
-                if (Array.isArray(parsed)) return parsed.slice(0, 5);
-            } catch (_) { /* ignore */ }
+                if (Array.isArray(parsed)) return addSearchUrls(parsed.slice(0, 5));
+            } catch (_) { /* try next */ }
+
+            // Last resort: extract individual JSON objects
+            const objects = [];
+            const objRegex = /\{[^{}]*"name"\s*:\s*"[^"]+?"[^{}]*\}/g;
+            let m;
+            while ((m = objRegex.exec(clean)) !== null) {
+                try { objects.push(JSON.parse(m[0])); } catch (_) { /* skip */ }
+            }
+            if (objects.length > 0) return addSearchUrls(objects.slice(0, 5));
+
             hfError = 'Respuesta no tiene formato JSON valido';
         } catch (err) {
             hfError = err.response?.data?.error || err.message;
@@ -288,7 +310,7 @@ const recommendPurchases = async ({ garments = [] }) => {
     }
 
     const details = [geminiError && `Gemini: ${shortenError(geminiError)}`, hfError && `HuggingFace: ${shortenError(hfError)}`].filter(Boolean).join(' | ');
-    return [{ name: 'Error', description: details || 'No se pudieron obtener recomendaciones.', reason: 'Verifica las API keys', category: 'error' }];
+    return [{ name: 'Error', description: details || 'No se pudieron obtener recomendaciones.', reason: 'Verifica las API keys', category: 'error', searchUrl: '' }];
 };
 
 module.exports = { recommendByWeather, chatAboutWardrobe, recommendPurchases };

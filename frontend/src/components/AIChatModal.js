@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
     StyleSheet, Modal, KeyboardAvoidingView, Platform,
-    ActivityIndicator, StatusBar, Animated,
+    ActivityIndicator, StatusBar, Animated, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -26,6 +26,21 @@ const categoryIcon = (cat) => {
         if (lower.includes(key)) return icon;
     }
     return 'bag-outline';
+};
+
+// Color de fondo por categoría para las tarjetas de producto
+const categoryColor = (cat) => {
+    const map = {
+        'camisa': '#E3F2FD', 'camiseta': '#E3F2FD', 'pantalón': '#FFF3E0', 'pantalones': '#FFF3E0',
+        'vestido': '#FCE4EC', 'falda': '#FCE4EC', 'chaqueta': '#E8EAF6', 'abrigo': '#E8EAF6',
+        'zapatos': '#E0F2F1', 'zapatillas': '#E0F2F1', 'botas': '#E0F2F1', 'accesorio': '#FFF9C4',
+        'bolso': '#F3E5F5', 'jersey': '#E3F2FD', 'sudadera': '#E8EAF6',
+    };
+    const lower = (cat || '').toLowerCase();
+    for (const [key, color] of Object.entries(map)) {
+        if (lower.includes(key)) return color;
+    }
+    return '#F5F5F5';
 };
 
 // Animated wrapper for AI messages with fade-in
@@ -130,21 +145,55 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
         );
     };
 
-    // ── Render tarjeta de compra (modo shopping) ─────────────────────────────
-    const renderShoppingCard = ({ item }) => (
-        <View style={[styles.shopCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <Ionicons name={categoryIcon(item.category)} size={32} color={c.primary} style={styles.shopIcon} />
-            <View style={{ flex: 1 }}>
-                <Text style={[styles.shopName, { color: c.text }]}>{item.name}</Text>
-                <Text style={[styles.shopDesc, { color: c.textSecondary }]} numberOfLines={2}>
-                    {item.description}
-                </Text>
-                <Text style={[styles.shopReason, { color: c.primary }]}>
-                    {item.reason}
-                </Text>
-            </View>
-        </View>
-    );
+    // ── Render tarjeta de producto (modo shopping) ─────────────────────────────
+    const renderShoppingCard = ({ item }) => {
+        const isError = item.category === 'error' || item.category === 'info';
+        const bgColor = categoryColor(item.category);
+        const iconName = categoryIcon(item.category);
+
+        const handleOpenLink = () => {
+            if (item.searchUrl) Linking.openURL(item.searchUrl).catch(() => {});
+        };
+
+        if (isError) {
+            return (
+                <View style={[styles.shopCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+                    <Ionicons name="alert-circle-outline" size={24} color={c.error} />
+                    <Text style={[styles.shopDesc, { color: c.textSecondary, flex: 1, marginLeft: 10 }]}>{item.description}</Text>
+                </View>
+            );
+        }
+
+        return (
+            <TouchableOpacity
+                style={[styles.productCard, { backgroundColor: c.surface, borderColor: c.border }]}
+                onPress={handleOpenLink}
+                activeOpacity={item.searchUrl ? 0.7 : 1}
+            >
+                {/* Imagen/icono del producto */}
+                <View style={[styles.productImgWrap, { backgroundColor: bgColor }]}>
+                    <Ionicons name={iconName} size={40} color={c.primary} />
+                </View>
+
+                {/* Info del producto */}
+                <View style={styles.productInfo}>
+                    <Text style={[styles.productName, { color: c.text }]} numberOfLines={2}>{item.name}</Text>
+                    <Text style={[styles.productDesc, { color: c.textSecondary }]} numberOfLines={2}>{item.description}</Text>
+                    <Text style={[styles.productReason, { color: c.primary }]} numberOfLines={1}>
+                        <Ionicons name="bulb-outline" size={11} color={c.primary} /> {item.reason}
+                    </Text>
+
+                    {/* Botón ver en tiendas */}
+                    {item.searchUrl ? (
+                        <View style={[styles.shopLinkBtn, { backgroundColor: c.primary }]}>
+                            <Ionicons name="cart-outline" size={14} color="#FFF" />
+                            <Text style={styles.shopLinkText}>Ver en tiendas</Text>
+                        </View>
+                    ) : null}
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
@@ -337,11 +386,24 @@ const styles = StyleSheet.create({
 
     shopList: { padding: 16 },
     shopHeader: { fontSize: 13, marginBottom: 16, lineHeight: 18 },
-    shopCard: { flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12, gap: 12 },
-    shopIcon: { marginTop: 2 },
-    shopName: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
-    shopDesc: { fontSize: 13, lineHeight: 18, marginBottom: 6 },
-    shopReason: { fontSize: 12, fontWeight: '600' },
+    shopCard: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12 },
+
+    productCard: {
+        borderWidth: 1, borderRadius: 16, marginBottom: 14, overflow: 'hidden',
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    },
+    productImgWrap: {
+        width: '100%', height: 100, justifyContent: 'center', alignItems: 'center',
+    },
+    productInfo: { padding: 14, gap: 4 },
+    productName: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+    productDesc: { fontSize: 13, lineHeight: 18, marginBottom: 2 },
+    productReason: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
+    shopLinkBtn: {
+        flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, gap: 6, marginTop: 4,
+    },
+    shopLinkText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 
     centeredLoad: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
     loadingText: { marginTop: 16, fontSize: 14, textAlign: 'center' },

@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // En web (PC) usa localhost; en móvil usa la IP de la red local
-const BASE_HOST = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://172.20.10.2:3000';
+const BASE_HOST = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://172.20.10.3:3000';
 const BASE_URL = `${BASE_HOST}/api/v1`;
 export const IMAGE_BASE_URL = BASE_HOST;
 

@@ -142,7 +142,7 @@ const ChatScreen = ({ route, navigation }) => {
                                 : [styles.bubbleOther, { backgroundColor: c.surfaceVariant, borderColor: c.border }],
                         ]}
                     >
-                        {hasMedia && msg.media_type === 'image' && (
+                        {hasMedia && msg.media_type === 'photo' && (
                             <Image
                                 source={{ uri: `${IMAGE_BASE_URL}${msg.media_url}` }}
                                 style={styles.mediaImage}
@@ -155,7 +155,13 @@ const ChatScreen = ({ route, navigation }) => {
                                 <Text style={[styles.audioText, { color: isMe ? '#FFF' : c.text }]}>Mensaje de voz</Text>
                             </View>
                         )}
-                        {msg.text && !(hasMedia && msg.media_type === 'image' && !msg.text.trim()) && (
+                        {hasMedia && msg.media_type === 'post' && (
+                            <View style={[styles.sharedPostBubble, { backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : c.surfaceVariant, borderColor: c.border }]}>
+                                <Ionicons name="albums-outline" size={18} color={isMe ? '#FFF' : c.primary} />
+                                <Text style={[styles.sharedPostText, { color: isMe ? '#FFF' : c.text }]}>Publicacion compartida</Text>
+                            </View>
+                        )}
+                        {msg.text && !(hasMedia && msg.media_type === 'photo' && !msg.text.trim()) && (
                             <Text style={[styles.bubbleText, { color: isMe ? '#FFF' : c.text }]}>
                                 {msg.text}
                             </Text>
@@ -329,6 +335,8 @@ const styles = StyleSheet.create({
     mediaImage: { width: 220, height: 220, borderRadius: 16, marginBottom: 4 },
     audioRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 6 },
     audioText: { fontSize: 14, fontWeight: '600' },
+    sharedPostBubble: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, marginBottom: 4 },
+    sharedPostText: { fontSize: 13, fontWeight: '600' },
 
     attachBar: {
         flexDirection: 'row', gap: 16, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1,

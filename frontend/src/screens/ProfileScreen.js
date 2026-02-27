@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
     fetchMyProfile, fetchUserProfile, fetchUserPosts,
     toggleFollow, fetchFollowers, fetchFollowing, clearViewedProfile,
-    toggleVisibility,
+    toggleVisibility, fetchFollowRequests, acceptRequest, rejectRequest,
 } from '../store/profileSlice';
 import { fetchComments, addComment, removeComment, toggleLike } from '../store/socialSlice';
 import { logoutUser } from '../store/authSlice';
@@ -61,7 +61,7 @@ const ProfileScreen = ({ navigation, route }) => {
     const { user }           = useSelector((s) => s.auth);
     const {
         myProfile, viewedProfile, viewedPosts, viewedHasMore,
-        followers, following, isLoading,
+        followers, following, followRequests, isLoading,
     } = useSelector((s) => s.profile);
     const { comments, commentsLoading } = useSelector((s) => s.social);
 
@@ -77,6 +77,7 @@ const ProfileScreen = ({ navigation, route }) => {
     const [refreshing, setRefreshing]  = useState(false);
     const [likers, setLikers] = useState([]);
     const [showLikers, setShowLikers] = useState(false);
+    const [showRequests, setShowRequests] = useState(false);
 
     // Post detail + comments
     const [selectedPost, setSelectedPost] = useState(null);
@@ -114,7 +115,12 @@ const ProfileScreen = ({ navigation, route }) => {
 
     const handleFollow = () => {
         if (!profile) return;
-        dispatch(toggleFollow({ userId: profile.id, isFollowing: profile.is_following }));
+        dispatch(toggleFollow({ userId: profile.id, isFollowing: profile.is_following, hasPendingRequest: profile.has_pending_request }));
+    };
+
+    const openRequests = () => {
+        dispatch(fetchFollowRequests());
+        setShowRequests(true);
     };
 
     const handleToggleVisibility = () => {
@@ -312,6 +318,24 @@ const ProfileScreen = ({ navigation, route }) => {
                 rightAction={
                     canEdit ? (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                            {(myProfile?.pending_requests_count > 0) && (
+                                <TouchableOpacity
+                                    onPress={openRequests}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    style={{ position: 'relative' }}
+                                >
+                                    <Ionicons name="person-add-outline" size={22} color={c.primary} />
+                                    <View style={{
+                                        position: 'absolute', top: -6, right: -8,
+                                        backgroundColor: c.error, borderRadius: 9, minWidth: 18, height: 18,
+                                        justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4,
+                                    }}>
+                                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>
+                                            {myProfile.pending_requests_count}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
                             <TouchableOpacity
                                 onPress={() => navigation.navigate('Messages')}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -385,17 +409,17 @@ const ProfileScreen = ({ navigation, route }) => {
                                     <TouchableOpacity
                                         style={[
                                             styles.followBtn,
-                                            { backgroundColor: profile.is_following ? 'transparent' : c.primary,
-                                              borderColor: c.primary },
+                                            { backgroundColor: (profile.is_following || profile.has_pending_request) ? 'transparent' : c.primary,
+                                              borderColor: profile.has_pending_request ? c.textMuted : c.primary },
                                         ]}
                                         onPress={handleFollow}
                                         activeOpacity={0.8}
                                     >
                                         <Text style={[
                                             styles.followBtnText,
-                                            { color: profile.is_following ? c.primary : '#FFF' },
+                                            { color: profile.is_following ? c.primary : profile.has_pending_request ? c.textMuted : '#FFF' },
                                         ]}>
-                                            {profile.is_following ? 'Siguiendo' : 'Seguir'}
+                                            {profile.is_following ? 'Siguiendo' : profile.has_pending_request ? 'Solicitado' : 'Seguir'}
                                         </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
@@ -438,6 +462,19 @@ const ProfileScreen = ({ navigation, route }) => {
                         <Text style={[styles.sectionTitle, { color: c.textSecondary, borderBottomColor: c.border }]}>
                             Publicaciones
                         </Text>
+
+                        {/* Perfil privado: bloquear acceso si no lo sigues */}
+                        {!isOwnProfile && profile && profile.is_public === false && !profile.is_following && (
+                            <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 32 }}>
+                                <Ionicons name="lock-closed-outline" size={48} color={c.textMuted} />
+                                <Text style={{ color: c.text, fontSize: 16, fontWeight: '700', marginTop: 12, textAlign: 'center' }}>
+                                    Esta cuenta es privada
+                                </Text>
+                                <Text style={{ color: c.textMuted, fontSize: 14, marginTop: 6, textAlign: 'center' }}>
+                                    Sigue a este usuario para ver sus publicaciones.
+                                </Text>
+                            </View>
+                        )}
                     </View>
                 }
             />
@@ -625,7 +662,7 @@ const ProfileScreen = ({ navigation, route }) => {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Modal: Likers — quién dio like */}
+            {/* Modal: Likers */}
             <Modal visible={showLikers} animationType="slide" transparent onRequestClose={() => setShowLikers(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalBox, { backgroundColor: c.surface }]}>
@@ -639,7 +676,7 @@ const ProfileScreen = ({ navigation, route }) => {
                             data={likers}
                             keyExtractor={(item, i) => `liker-${item.user?.id || i}`}
                             ListEmptyComponent={
-                                <Text style={[styles.noPosts, { color: c.textMuted }]}>Nadie ha dado like aún.</Text>
+                                <Text style={[styles.noPosts, { color: c.textMuted }]}>Nadie ha dado like aun.</Text>
                             }
                             renderItem={({ item }) => {
                                 const u = item.user || {};
@@ -664,6 +701,69 @@ const ProfileScreen = ({ navigation, route }) => {
                                         </View>
                                         <Text style={[styles.rowName, { color: c.text }]}>{u.fullName || 'Usuario'}</Text>
                                     </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Modal: Solicitudes de seguimiento */}
+            <Modal visible={showRequests} animationType="slide" transparent onRequestClose={() => setShowRequests(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalBox, { backgroundColor: c.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: c.text }]}>Solicitudes</Text>
+                            <TouchableOpacity onPress={() => setShowRequests(false)}>
+                                <Ionicons name="close" size={22} color={c.primary} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={followRequests}
+                            keyExtractor={(item) => item.id.toString()}
+                            ListEmptyComponent={
+                                <Text style={[styles.noPosts, { color: c.textMuted }]}>No tienes solicitudes pendientes.</Text>
+                            }
+                            renderItem={({ item: req }) => {
+                                const u = req.requester || {};
+                                return (
+                                    <View style={[styles.userRow, { borderBottomColor: c.border }]}>
+                                        <TouchableOpacity
+                                            style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                                            onPress={() => {
+                                                setShowRequests(false);
+                                                navigation.push('UserProfile', { userId: u.id });
+                                            }}
+                                        >
+                                            <View style={[styles.rowAvatar, { backgroundColor: c.primary + '20' }]}>
+                                                {u.avatarUrl ? (
+                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${u.avatarUrl}` }} style={styles.rowAvatarImg} />
+                                                ) : (
+                                                    <Text style={[styles.rowAvatarText, { color: c.primary }]}>
+                                                        {(u.fullName || '?')[0].toUpperCase()}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.rowName, { color: c.text }]} numberOfLines={1}>{u.fullName || 'Usuario'}</Text>
+                                                {u.username ? <Text style={{ color: c.textMuted, fontSize: 12 }}>@{u.username}</Text> : null}
+                                            </View>
+                                        </TouchableOpacity>
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TouchableOpacity
+                                                style={{ backgroundColor: c.primary, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16 }}
+                                                onPress={() => dispatch(acceptRequest(req.id))}
+                                            >
+                                                <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700' }}>Aceptar</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={{ backgroundColor: c.surfaceVariant, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: c.border }}
+                                                onPress={() => dispatch(rejectRequest(req.id))}
+                                            >
+                                                <Text style={{ color: c.text, fontSize: 13, fontWeight: '600' }}>Rechazar</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
                                 );
                             }}
                         />

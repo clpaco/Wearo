@@ -37,13 +37,15 @@ const getByDate = async (req, res) => {
 // POST /api/v1/calendar — Añadir entrada (outfit o prendas sueltas) solo para hoy
 const assign = async (req, res) => {
     try {
-        const { date, outfitId, garmentIds, notes } = req.body;
+        const { date, outfitId, garmentIds: rawGarmentIds, notes } = req.body;
+        const garmentIds = Array.isArray(rawGarmentIds) ? rawGarmentIds.map(Number).filter(n => !isNaN(n)) : [];
         if (!date) {
             return res.status(400).json({ error: true, mensaje: 'La fecha es obligatoria' });
         }
 
-        // Solo permitir entradas para hoy
-        const today = new Date().toISOString().split('T')[0];
+        // Solo permitir entradas para hoy (zona local del servidor)
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         if (date !== today) {
             return res.status(400).json({ error: true, mensaje: 'Solo puedes añadir entradas para hoy' });
         }
@@ -96,9 +98,10 @@ const removeEntry = async (req, res) => {
         }
 
         // Solo permitir eliminar entradas de hoy
-        const today = new Date().toISOString().split('T')[0];
+        const nowDel = new Date();
+        const todayDel = `${nowDel.getFullYear()}-${String(nowDel.getMonth() + 1).padStart(2, '0')}-${String(nowDel.getDate()).padStart(2, '0')}`;
         const entryDate = typeof entry.date === 'string' ? entry.date.split('T')[0] : String(entry.date);
-        if (entryDate !== today) {
+        if (entryDate !== todayDel) {
             return res.status(400).json({ error: true, mensaje: 'Solo puedes eliminar entradas de hoy' });
         }
 

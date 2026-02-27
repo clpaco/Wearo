@@ -66,12 +66,17 @@ export const uploadAvatar = createAsyncThunk(
 
 export const toggleFollow = createAsyncThunk(
     'profile/toggleFollow',
-    async ({ userId, isFollowing }, { rejectWithValue }) => {
+    async ({ userId, isFollowing, hasPendingRequest }, { rejectWithValue }) => {
         try {
-            const data = isFollowing
+            const data = (isFollowing || hasPendingRequest)
                 ? await profileSvc.unfollowUser(userId)
                 : await profileSvc.followUser(userId);
-            return { userId, is_following: data.is_following, follower_count: data.follower_count };
+            return {
+                userId,
+                is_following: data.is_following,
+                has_pending_request: data.has_pending_request || false,
+                follower_count: data.follower_count,
+            };
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al seguir');
         }
@@ -114,6 +119,44 @@ export const fetchFollowing = createAsyncThunk(
     }
 );
 
+// ── Solicitudes de seguimiento ──────────────────────────────────────────────
+
+export const fetchFollowRequests = createAsyncThunk(
+    'profile/fetchFollowRequests',
+    async (_, { rejectWithValue }) => {
+        try {
+            const data = await profileSvc.getFollowRequests();
+            return data.requests;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al cargar solicitudes');
+        }
+    }
+);
+
+export const acceptRequest = createAsyncThunk(
+    'profile/acceptRequest',
+    async (requestId, { rejectWithValue }) => {
+        try {
+            await profileSvc.acceptFollowRequest(requestId);
+            return requestId;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al aceptar solicitud');
+        }
+    }
+);
+
+export const rejectRequest = createAsyncThunk(
+    'profile/rejectRequest',
+    async (requestId, { rejectWithValue }) => {
+        try {
+            await profileSvc.rejectFollowRequest(requestId);
+            return requestId;
+        } catch (err) {
+            return rejectWithValue(err.response?.data?.mensaje || 'Error al rechazar solicitud');
+        }
+    }
+);
+
 // ── Slice ─────────────────────────────────────────────────────────────────────
 
 const profileSlice = createSlice({
@@ -125,6 +168,7 @@ const profileSlice = createSlice({
         viewedHasMore: true,
         followers: [],
         following: [],
+        followRequests: [],
         isLoading: false,
         isSaving: false,
         error: null,
@@ -169,8 +213,11 @@ const profileSlice = createSlice({
             // toggleFollow
             .addCase(toggleFollow.fulfilled, (state, { payload }) => {
                 if (state.viewedProfile && String(state.viewedProfile.id) === String(payload.userId)) {
-                    state.viewedProfile.is_following   = payload.is_following;
-                    state.viewedProfile.follower_count = payload.follower_count;
+                    state.viewedProfile.is_following        = payload.is_following;
+                    state.viewedProfile.has_pending_request = payload.has_pending_request;
+                    if (payload.follower_count != null) {
+                        state.viewedProfile.follower_count = payload.follower_count;
+                    }
                 }
             })
 
@@ -181,7 +228,23 @@ const profileSlice = createSlice({
 
             // followers / following
             .addCase(fetchFollowers.fulfilled, (state, { payload }) => { state.followers = payload; })
-            .addCase(fetchFollowing.fulfilled, (state, { payload }) => { state.following = payload; });
+            .addCase(fetchFollowing.fulfilled, (state, { payload }) => { state.following = payload; })
+
+            // follow requests
+            .addCase(fetchFollowRequests.fulfilled, (state, { payload }) => { state.followRequests = payload; })
+            .addCase(acceptRequest.fulfilled, (state, { payload }) => {
+                state.followRequests = state.followRequests.filter((r) => r.id !== payload);
+                if (state.myProfile) {
+                    state.myProfile.pending_requests_count = Math.max(0, (state.myProfile.pending_requests_count || 1) - 1);
+                    state.myProfile.follower_count = (state.myProfile.follower_count || 0) + 1;
+                }
+            })
+            .addCase(rejectRequest.fulfilled, (state, { payload }) => {
+                state.followRequests = state.followRequests.filter((r) => r.id !== payload);
+                if (state.myProfile) {
+                    state.myProfile.pending_requests_count = Math.max(0, (state.myProfile.pending_requests_count || 1) - 1);
+                }
+            });
     },
 });
 

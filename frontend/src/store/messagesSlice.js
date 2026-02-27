@@ -204,7 +204,7 @@ const messagesSlice = createSlice({
                 state.chatMessages[conversationId].push(message);
                 const conv = state.conversations.find((c) => c.id === conversationId);
                 if (conv) {
-                    conv.last_message_text = message.media_type === 'image' ? '📷 Foto' : '🎤 Audio';
+                    conv.last_message_text = message.media_type === 'photo' ? '📷 Foto' : message.media_type === 'audio' ? '🎤 Audio' : '📌 Publicacion';
                     conv.last_message_at = message.created_at;
                 }
             })

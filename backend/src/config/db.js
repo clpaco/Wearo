@@ -1,5 +1,8 @@
 // Configuración de conexión a PostgreSQL
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// Devolver DATE como string YYYY-MM-DD en vez de Date object (evita desfase por timezone)
+types.setTypeParser(1082, (val) => val);
 const path = require('path');
 const dotenv = require('dotenv');
 

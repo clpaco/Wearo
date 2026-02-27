@@ -232,7 +232,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                             </Text>
                         </View>
                         <Text style={[styles.headerSub, { color: c.textSecondary }]}>
-                            {isOutfits ? 'Pregunta sobre tu armario' : 'Sugerencias personalizadas con Gemini AI'}
+                            {isOutfits ? 'Pregunta sobre tu armario' : 'Sugerencias personalizadas con IA'}
                         </Text>
                     </View>
                     {isOutfits && chatMessages.length > 0 && (
@@ -352,7 +352,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                             <View style={styles.centeredLoad}>
                                 <Ionicons name="bag-outline" size={44} color={c.textSecondary} style={{ marginBottom: 12 }} />
                                 <Text style={[{ color: c.textSecondary, textAlign: 'center' }]}>
-                                    No se pudieron obtener sugerencias.{'\n'}Verifica que GEMINI_API_KEY está configurada.
+                                    No se pudieron obtener sugerencias.{'\n'}Verifica que las API keys de IA están configuradas.
                                 </Text>
                                 <TouchableOpacity
                                     style={[styles.retryBtn, { backgroundColor: c.primary }]}

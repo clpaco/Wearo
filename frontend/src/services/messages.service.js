@@ -42,13 +42,15 @@ export const sendMessage = async (conversationId, text) => {
 // Enviar mensaje con media (foto o audio)
 export const sendMediaMessage = async (conversationId, mediaUri, mediaType) => {
     const formData = new FormData();
-    const ext = mediaType === 'audio' ? 'mp4' : 'jpg';
-    const mime = mediaType === 'audio' ? 'audio/mp4' : 'image/jpeg';
+    const ext = mediaType === 'audio' ? 'm4a' : 'jpg';
+    const mime = mediaType === 'audio' ? 'audio/m4a' : 'image/jpeg';
     formData.append('media', {
         uri: mediaUri,
         name: `msg_${Date.now()}.${ext}`,
         type: mime,
     });
+    formData.append('mediaType', mediaType === 'audio' ? 'audio' : 'photo');
+    formData.append('text', '');
     const { data } = await api.post(`/messages/${conversationId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });

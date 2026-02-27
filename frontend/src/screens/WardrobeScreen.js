@@ -126,7 +126,7 @@ const WardrobeScreen = ({ navigation }) => {
                 )}
                 {item.last_worn ? (
                     <Text style={[styles.garmentLastWorn, { color: c.textMuted }]}>
-                        Usado: {new Date(item.last_worn + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                        Usado: {new Date(String(item.last_worn).substring(0, 10) + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                     </Text>
                 ) : item.times_worn > 0 ? (
                     <Text style={[styles.garmentLastWorn, { color: c.textMuted }]}>Usado {item.times_worn}x</Text>

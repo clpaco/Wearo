@@ -8,6 +8,8 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchFeed, toggleLike, shareOutfit, unshareOutfit, resetFeed, fetchComments, addComment, removeComment } from '../store/socialSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
+import { fetchConversations, startConversation } from '../store/messagesSlice';
+import { sendSharedPostMessage } from '../services/messages.service';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../hooks/useTheme';
@@ -51,6 +53,10 @@ const SocialScreen = ({ navigation }) => {
     // Likers modal
     const [likersData, setLikersData] = useState([]);
     const [showLikers, setShowLikers] = useState(false);
+    // Share via DM modal
+    const [sharePostId, setSharePostId] = useState(null);
+    const [showShareDM, setShowShareDM] = useState(false);
+    const conversations = useSelector((s) => s.messages.conversations);
 
     const getLikeAnim = (postId) => {
         if (!likeAnims.current[postId]) {
@@ -221,6 +227,23 @@ const SocialScreen = ({ navigation }) => {
         }
     };
 
+    const handleOpenShareDM = (postId) => {
+        setSharePostId(postId);
+        dispatch(fetchConversations());
+        setShowShareDM(true);
+    };
+
+    const handleShareToConversation = async (conversationId) => {
+        try {
+            await sendSharedPostMessage(conversationId, sharePostId);
+            setShowShareDM(false);
+            setSharePostId(null);
+            Alert.alert('Enviado', 'Publicacion compartida por DM.');
+        } catch {
+            Alert.alert('Error', 'No se pudo compartir');
+        }
+    };
+
     // Find current post for comments modal (F2)
     const commentsPost = commentsPostId ? feed.find((p) => p.id === commentsPostId) : null;
 
@@ -294,7 +317,7 @@ const SocialScreen = ({ navigation }) => {
 
                 {/* User-uploaded photos */}
                 {photos.length > 0 && (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.postPhotosRow} contentContainerStyle={styles.postPhotosContent}>
+                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.postPhotosRow}>
                         {photos.map((photoUrl, idx) => (
                             <Image
                                 key={idx}
@@ -321,9 +344,12 @@ const SocialScreen = ({ navigation }) => {
                     <TouchableOpacity style={styles.actionBtn} onPress={() => openComments(post.id)} activeOpacity={0.6}>
                         <Ionicons name="chatbubble-outline" size={23} color={c.text} />
                     </TouchableOpacity>
-                    <View style={styles.actionBtn}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => setSelectedPost(post)} activeOpacity={0.6}>
                         <Ionicons name="shirt-outline" size={21} color={c.text} />
-                    </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleOpenShareDM(post.id)} activeOpacity={0.6}>
+                        <Ionicons name="paper-plane-outline" size={21} color={c.text} />
+                    </TouchableOpacity>
                     {outfit.season && (
                         <View style={[styles.seasonTag, { backgroundColor: c.accent + '15' }]}>
                             <Text style={[styles.seasonTagText, { color: c.accent }]}>{outfit.season}</Text>
@@ -1038,6 +1064,51 @@ const SocialScreen = ({ navigation }) => {
                     </View>
                 </View>
             </Modal>
+
+            {/* Modal: Compartir publicacion por DM */}
+            <Modal visible={showShareDM} animationType="slide" transparent onRequestClose={() => setShowShareDM(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: c.surface }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: c.text }]}>Enviar a...</Text>
+                            <TouchableOpacity onPress={() => setShowShareDM(false)}>
+                                <Ionicons name="close" size={22} color={c.primary} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={conversations}
+                            keyExtractor={(item) => item.id.toString()}
+                            ListEmptyComponent={
+                                <Text style={[{ textAlign: 'center', padding: 32, color: c.textMuted, fontSize: 14 }]}>
+                                    No tienes conversaciones. Busca a alguien en Mensajes primero.
+                                </Text>
+                            }
+                            renderItem={({ item: conv }) => {
+                                const other = conv.other_user || {};
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.searchUserRow, { borderBottomColor: c.border }]}
+                                        onPress={() => handleShareToConversation(conv.id)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={[styles.avatar, { backgroundColor: c.primary + '20' }]}>
+                                            {other.avatarUrl ? (
+                                                <Image source={{ uri: `${IMAGE_BASE_URL}${other.avatarUrl}` }} style={styles.avatarImg} />
+                                            ) : (
+                                                <Text style={[styles.avatarText, { color: c.primary }]}>
+                                                    {(other.fullName || '?')[0].toUpperCase()}
+                                                </Text>
+                                            )}
+                                        </View>
+                                        <Text style={[styles.searchUserName, { color: c.text }]}>{other.fullName || 'Usuario'}</Text>
+                                        <Ionicons name="paper-plane" size={18} color={c.primary} />
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -1201,7 +1272,7 @@ const styles = StyleSheet.create({
     // Comentarios — improved layout
     commentsModal: {
         borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        maxHeight: '85%', paddingHorizontal: 16, paddingBottom: 8,
+        height: '85%', paddingHorizontal: 16, paddingBottom: 8,
     },
     dragHandle: { alignItems: 'center', paddingVertical: 10 },
     dragBar: { width: 40, height: 4, borderRadius: 2 },
@@ -1241,9 +1312,9 @@ const styles = StyleSheet.create({
     commentSendBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 
     // Post photos (user-uploaded)
-    postPhotosRow: { marginTop: 4 },
-    postPhotosContent: { paddingHorizontal: 14, gap: 8 },
-    postPhoto: { width: SCREEN_WIDTH * 0.65, height: SCREEN_WIDTH * 0.5, borderRadius: 12 },
+    postPhotosRow: { marginTop: 0 },
+    postPhotosContent: { gap: 0 },
+    postPhoto: { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.85 },
 
     // Share modal photo picker
     photoPickerRow: { marginBottom: 8 },

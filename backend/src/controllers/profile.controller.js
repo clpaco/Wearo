@@ -1,6 +1,7 @@
-// Controlador de Perfil — GET/PUT perfil, follow/unfollow, seguidores
+// Controlador de Perfil — GET/PUT perfil, follow/unfollow, seguidores, solicitudes
 const profileModel = require('../models/user-profile.model');
 const followModel  = require('../models/follow.model');
+const { query: dbQuery } = require('../config/db');
 const path = require('path');
 const fs   = require('fs');
 const multer = require('multer');
@@ -19,7 +20,7 @@ const avatarUpload = multer({
     }),
     fileFilter: (_req, file, cb) => {
         const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'].includes(file.mimetype);
-        cb(ok ? null : new Error('Solo imágenes permitidas'), ok);
+        cb(ok ? null : new Error('Solo imagenes permitidas'), ok);
     },
     limits: { fileSize: 5 * 1024 * 1024 },
 }).single('avatar');
@@ -29,20 +30,24 @@ const getMe = async (req, res) => {
     try {
         const profile = await profileModel.getUserProfile(req.user.id, req.user.id);
         if (!profile) return res.status(404).json({ error: true, mensaje: 'Perfil no encontrado' });
-        res.json({ profile });
+        const pendingCount = await followModel.countPendingRequests(req.user.id);
+        res.json({ profile: { ...profile, pending_requests_count: pendingCount } });
     } catch (err) {
         console.error('Error getMe:', err);
         res.status(500).json({ error: true, mensaje: 'Error al obtener perfil' });
     }
 };
 
-// GET /api/v1/users/:id — Perfil público
+// GET /api/v1/users/:id — Perfil publico
 const getProfile = async (req, res) => {
     try {
         const profile = await profileModel.getUserProfile(req.params.id, req.user.id);
         if (!profile) return res.status(404).json({ error: true, mensaje: 'Usuario no encontrado' });
-        const following = await followModel.isFollowing(req.user.id, req.params.id);
-        res.json({ profile: { ...profile, is_following: following } });
+        const [following, pendingRequest] = await Promise.all([
+            followModel.isFollowing(req.user.id, req.params.id),
+            followModel.hasPendingRequest(req.user.id, req.params.id),
+        ]);
+        res.json({ profile: { ...profile, is_following: following, has_pending_request: pendingRequest } });
     } catch (err) {
         console.error('Error getProfile:', err);
         res.status(500).json({ error: true, mensaje: 'Error al obtener perfil' });
@@ -59,7 +64,7 @@ const updateMe = async (req, res) => {
         res.json({ mensaje: 'Perfil actualizado', profile: updated });
     } catch (err) {
         if (err.constraint === 'idx_users_username') {
-            return res.status(409).json({ error: true, mensaje: 'Ese nombre de usuario ya está en uso' });
+            return res.status(409).json({ error: true, mensaje: 'Ese nombre de usuario ya esta en uso' });
         }
         console.error('Error updateMe:', err);
         res.status(500).json({ error: true, mensaje: 'Error al actualizar perfil' });
@@ -70,7 +75,7 @@ const updateMe = async (req, res) => {
 const uploadAvatar = (req, res) => {
     avatarUpload(req, res, async (err) => {
         if (err) return res.status(400).json({ error: true, mensaje: err.message });
-        if (!req.file) return res.status(400).json({ error: true, mensaje: 'No se proporcionó imagen' });
+        if (!req.file) return res.status(400).json({ error: true, mensaje: 'No se proporciono imagen' });
         try {
             const avatarUrl = `/uploads/avatars/${req.file.filename}`;
             const updated = await profileModel.updateProfile(req.user.id, { avatarUrl });
@@ -85,9 +90,21 @@ const uploadAvatar = (req, res) => {
 // GET /api/v1/users/:id/posts — Posts compartidos de un usuario
 const getUserPosts = async (req, res) => {
     try {
+        // Si perfil privado y no lo sigues, no mostrar posts
+        const targetId = req.params.id;
+        if (String(targetId) !== String(req.user.id)) {
+            const targetUser = await dbQuery('SELECT is_public FROM users WHERE id = $1', [targetId]);
+            const isPublic = targetUser.rows[0]?.is_public !== false;
+            if (!isPublic) {
+                const follows = await followModel.isFollowing(req.user.id, targetId);
+                if (!follows) {
+                    return res.json({ posts: [], hasMore: false });
+                }
+            }
+        }
         const limit  = parseInt(req.query.limit, 10) || 20;
         const offset = parseInt(req.query.offset, 10) || 0;
-        const posts  = await profileModel.getUserPosts(req.params.id, req.user.id, { limit, offset });
+        const posts  = await profileModel.getUserPosts(targetId, req.user.id, { limit, offset });
         res.json({ posts, hasMore: posts.length === limit });
     } catch (err) {
         console.error('Error getUserPosts:', err);
@@ -95,33 +112,47 @@ const getUserPosts = async (req, res) => {
     }
 };
 
-// POST /api/v1/users/:id/follow — Seguir usuario
+// POST /api/v1/users/:id/follow — Seguir usuario (o solicitar si es privado)
 const followUser = async (req, res) => {
     try {
         if (String(req.params.id) === String(req.user.id)) {
             return res.status(400).json({ error: true, mensaje: 'No puedes seguirte a ti mismo' });
         }
+        // Comprobar si el usuario objetivo es privado
+        const targetUser = await dbQuery('SELECT is_public FROM users WHERE id = $1', [req.params.id]);
+        const isPublic = targetUser.rows[0]?.is_public !== false;
+
+        if (!isPublic) {
+            // Perfil privado: crear solicitud
+            await followModel.createFollowRequest(req.user.id, req.params.id);
+            return res.json({ mensaje: 'Solicitud enviada', is_following: false, has_pending_request: true });
+        }
+
+        // Perfil publico: seguir directamente
         await followModel.follow(req.user.id, req.params.id);
         const [followers, following] = await Promise.all([
             followModel.countFollowers(req.params.id),
             followModel.countFollowing(req.params.id),
         ]);
-        res.json({ mensaje: 'Siguiendo', is_following: true, follower_count: followers, following_count: following });
+        res.json({ mensaje: 'Siguiendo', is_following: true, has_pending_request: false, follower_count: followers, following_count: following });
     } catch (err) {
         console.error('Error followUser:', err);
         res.status(500).json({ error: true, mensaje: 'Error al seguir usuario' });
     }
 };
 
-// DELETE /api/v1/users/:id/follow — Dejar de seguir
+// DELETE /api/v1/users/:id/follow — Dejar de seguir o cancelar solicitud
 const unfollowUser = async (req, res) => {
     try {
+        // Intentar dejar de seguir
         await followModel.unfollow(req.user.id, req.params.id);
+        // Tambien cancelar solicitud pendiente si existe
+        await followModel.cancelFollowRequest(req.user.id, req.params.id);
         const [followers, following] = await Promise.all([
             followModel.countFollowers(req.params.id),
             followModel.countFollowing(req.params.id),
         ]);
-        res.json({ mensaje: 'Dejado de seguir', is_following: false, follower_count: followers, following_count: following });
+        res.json({ mensaje: 'Dejado de seguir', is_following: false, has_pending_request: false, follower_count: followers, following_count: following });
     } catch (err) {
         console.error('Error unfollowUser:', err);
         res.status(500).json({ error: true, mensaje: 'Error al dejar de seguir' });
@@ -154,4 +185,45 @@ const getFollowing = async (req, res) => {
     }
 };
 
-module.exports = { getMe, getProfile, updateMe, uploadAvatar, getUserPosts, followUser, unfollowUser, getFollowers, getFollowing };
+// ── Solicitudes de seguimiento ──────────────────────────────────────────────
+
+// GET /api/v1/users/me/requests — Mis solicitudes pendientes de aceptar
+const getMyRequests = async (req, res) => {
+    try {
+        const requests = await followModel.getIncomingRequests(req.user.id);
+        res.json({ requests });
+    } catch (err) {
+        console.error('Error getMyRequests:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al obtener solicitudes' });
+    }
+};
+
+// POST /api/v1/users/me/requests/:requestId/accept — Aceptar solicitud
+const acceptRequest = async (req, res) => {
+    try {
+        const result = await followModel.acceptFollowRequest(req.params.requestId, req.user.id);
+        if (!result) return res.status(404).json({ error: true, mensaje: 'Solicitud no encontrada' });
+        res.json({ mensaje: 'Solicitud aceptada' });
+    } catch (err) {
+        console.error('Error acceptRequest:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al aceptar solicitud' });
+    }
+};
+
+// POST /api/v1/users/me/requests/:requestId/reject — Rechazar solicitud
+const rejectRequest = async (req, res) => {
+    try {
+        const result = await followModel.rejectFollowRequest(req.params.requestId, req.user.id);
+        if (!result) return res.status(404).json({ error: true, mensaje: 'Solicitud no encontrada' });
+        res.json({ mensaje: 'Solicitud rechazada' });
+    } catch (err) {
+        console.error('Error rejectRequest:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al rechazar solicitud' });
+    }
+};
+
+module.exports = {
+    getMe, getProfile, updateMe, uploadAvatar, getUserPosts,
+    followUser, unfollowUser, getFollowers, getFollowing,
+    getMyRequests, acceptRequest, rejectRequest,
+};

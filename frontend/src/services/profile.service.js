@@ -56,3 +56,19 @@ export const getFollowing = async (userId) => {
     const { data } = await api.get(`/users/${userId}/following`);
     return data;
 };
+
+// Solicitudes de seguimiento
+export const getFollowRequests = async () => {
+    const { data } = await api.get('/users/me/requests');
+    return data;
+};
+
+export const acceptFollowRequest = async (requestId) => {
+    const { data } = await api.post(`/users/me/requests/${requestId}/accept`);
+    return data;
+};
+
+export const rejectFollowRequest = async (requestId) => {
+    const { data } = await api.post(`/users/me/requests/${requestId}/reject`);
+    return data;
+};

@@ -33,7 +33,9 @@ const CalendarScreen = ({ navigation }) => {
     const [pickerTab, setPickerTab] = useState('outfits'); // 'outfits' | 'garments'
     const [selectedGarmentIds, setSelectedGarmentIds] = useState([]);
 
-    const today = new Date().toISOString().split('T')[0];
+    // Fecha de hoy en zona local (no UTC para evitar desfase)
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const isToday = selectedDate === today;
 
     // Cargar entradas del mes
@@ -254,7 +256,7 @@ const CalendarScreen = ({ navigation }) => {
                                             </View>
                                             <View style={{ flex: 1 }}>
                                                 <Text style={[styles.entryType, { color: c.textMuted }]}>
-                                                    {isOutfit ? 'Outfit' : 'Prendas sueltas'}
+                                                    {isOutfit ? 'Outfit' : 'Armario'}
                                                 </Text>
                                                 <Text style={[styles.entryName, { color: c.text }]} numberOfLines={2}>
                                                     {entryLabel(entry)}
@@ -353,7 +355,7 @@ const CalendarScreen = ({ navigation }) => {
                             >
                                 <Ionicons name="shirt-outline" size={16} color={pickerTab === 'garments' ? c.primary : c.textMuted} />
                                 <Text style={[styles.pickerTabText, { color: pickerTab === 'garments' ? c.primary : c.textMuted }]}>
-                                    Prendas sueltas
+                                    Armario
                                 </Text>
                             </TouchableOpacity>
                         </View>

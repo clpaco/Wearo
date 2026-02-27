@@ -136,7 +136,7 @@ const OutfitsScreen = ({ navigation }) => {
                     </Text>
                     {item.last_worn ? (
                         <Text style={[styles.wornCount, { color: c.textMuted }]}>
-                            Usado: {new Date(item.last_worn + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                            Usado: {new Date(String(item.last_worn).substring(0, 10) + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
                             {item.times_worn > 1 ? ` (${item.times_worn}x)` : ''}
                         </Text>
                     ) : item.times_worn > 0 ? (

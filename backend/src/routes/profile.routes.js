@@ -1,4 +1,4 @@
-// Rutas de perfil de usuario y seguidores
+// Rutas de perfil de usuario, seguidores y solicitudes
 const express = require('express');
 const router  = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
@@ -6,6 +6,7 @@ const {
     getMe, getProfile, updateMe, uploadAvatar,
     getUserPosts, followUser, unfollowUser,
     getFollowers, getFollowing,
+    getMyRequests, acceptRequest, rejectRequest,
 } = require('../controllers/profile.controller');
 
 router.use(verifyToken);
@@ -15,7 +16,12 @@ router.get('/me',          getMe);
 router.put('/me',          updateMe);
 router.put('/me/avatar',   uploadAvatar);
 
-// Perfil público & posts
+// Solicitudes de seguimiento (antes de /:id para que no capture 'me')
+router.get('/me/requests',                     getMyRequests);
+router.post('/me/requests/:requestId/accept',  acceptRequest);
+router.post('/me/requests/:requestId/reject',  rejectRequest);
+
+// Perfil publico & posts
 router.get('/:id',         getProfile);
 router.get('/:id/posts',   getUserPosts);
 

@@ -6,12 +6,7 @@ node_modules/
 .env.local
 .env.production
 
-# Uploads (archivos de usuarios, no van al repo)
-backend/uploads/garments/*
-backend/uploads/avatars/*
-backend/uploads/messages/*
-backend/uploads/outfits/*
-backend/uploads/social/*
+# Uploads temporales (no van al repo)
 backend/uploads/temp/*
 !backend/uploads/**/.gitkeep
 

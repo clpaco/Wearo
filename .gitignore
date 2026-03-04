@@ -1,34 +1,38 @@
-# ── Dependencias ──
+# Dependencies
 node_modules/
 
-# ── Variables de entorno ──
+# Environment variables (contienen secretos)
 .env
 .env.local
-.env.*.local
+.env.production
 
-# ── Build / Compilación ──
-/build
-/dist
+# Uploads (archivos de usuarios, no van al repo)
+backend/uploads/garments/*
+backend/uploads/avatars/*
+backend/uploads/messages/*
+backend/uploads/outfits/*
+backend/uploads/social/*
+backend/uploads/temp/*
+!backend/uploads/**/.gitkeep
+
+# Build outputs
+frontend/.expo/
 frontend/dist/
-backend/dist/
+frontend/web-build/
 
-# ── Expo ──
-.expo/
-web-build/
-
-# ── Archivos del sistema ──
+# OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# ── IDE ──
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# ── Logs ──
+# Logs
 *.log
 npm-debug.log*
 
-# ── Cobertura de tests ──
-coverage/
+# Temporary files
+tmpclaude-*
+nul

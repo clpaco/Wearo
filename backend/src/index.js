@@ -63,10 +63,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Iniciar servidor
-app.listen(PORT, async () => {
-  console.log(`🚀 Wearo API escuchando en http://localhost:${PORT}`);
-  console.log(`📋 Health check: http://localhost:${PORT}/api/v1/health`);
+// Iniciar servidor (0.0.0.0 para que Railway/Docker puedan acceder)
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`Wearo API escuchando en puerto ${PORT}`);
+  console.log(`Health check: /api/v1/health`);
 
   // Seed admin user
   try {

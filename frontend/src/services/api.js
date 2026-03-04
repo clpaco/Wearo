@@ -2,9 +2,12 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-// En web (PC) usa localhost; en móvil usa la IP de la red local
-const BASE_HOST = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://172.20.10.2:3000';
+// URL del backend: usa variable de Expo si existe, sino defaults locales
+const CONFIGURED_URL = Constants.expoConfig?.extra?.apiUrl;
+const BASE_HOST = CONFIGURED_URL
+    || (Platform.OS === 'web' ? 'http://localhost:3000' : 'http://172.20.10.2:3000');
 const BASE_URL = `${BASE_HOST}/api/v1`;
 export const IMAGE_BASE_URL = BASE_HOST;
 

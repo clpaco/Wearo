@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, Image,
     StyleSheet, ActivityIndicator, ScrollView, StatusBar, Alert,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
@@ -15,11 +16,14 @@ import ScreenHeader from '../components/ScreenHeader';
 const EditProfileScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { myProfile, isSaving } = useSelector((s) => s.profile);
+    const { user } = useSelector((s) => s.auth);
     const { theme } = useTheme();
     const c = theme.colors;
+    const isAdmin = user?.role === 'admin';
 
-    const [fullName, setFullName] = useState(myProfile?.full_name || '');
+    const [fullName, setFullName] = useState(myProfile?.admin_real_name || myProfile?.full_name || '');
     const [bio,      setBio]      = useState(myProfile?.bio       || '');
+    const [adminTag, setAdminTag] = useState(myProfile?.admin_tag || '');
 
     const avatarUri = myProfile?.avatar_url ? `${IMAGE_BASE_URL}${myProfile.avatar_url}` : null;
 
@@ -52,7 +56,9 @@ const EditProfileScreen = ({ navigation }) => {
             Alert.alert('Error', 'El nombre no puede estar vacío');
             return;
         }
-        const result = await dispatch(updateMyProfile({ fullName: fullName.trim(), bio: bio.trim() }));
+        const fields = { fullName: fullName.trim(), bio: bio.trim() };
+        if (isAdmin) fields.adminTag = adminTag.trim();
+        const result = await dispatch(updateMyProfile(fields));
         if (updateMyProfile.fulfilled.match(result)) {
             navigation.goBack();
         } else {
@@ -65,6 +71,10 @@ const EditProfileScreen = ({ navigation }) => {
             <StatusBar barStyle={c.statusBar} />
             <ScreenHeader title="Editar Perfil" onBack={() => navigation.goBack()} />
 
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Avatar */}
                 <View style={styles.avatarSection}>
@@ -118,6 +128,22 @@ const EditProfileScreen = ({ navigation }) => {
                     <Text style={[styles.charCount, { color: c.textMuted }]}>{bio.length}/200</Text>
                 </View>
 
+                {/* Admin Tag (solo admins) */}
+                {isAdmin && (
+                    <View style={styles.field}>
+                        <Text style={[styles.label, { color: c.textSecondary }]}>Apodo de admin</Text>
+                        <TextInput
+                            style={[styles.input, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText }]}
+                            placeholder="Ej: CEO, Soporte, Moda..."
+                            placeholderTextColor={c.placeholder}
+                            value={adminTag}
+                            onChangeText={setAdminTag}
+                            maxLength={50}
+                        />
+                        <Text style={[styles.charCount, { color: c.textMuted }]}>Solo visible para ti</Text>
+                    </View>
+                )}
+
                 {/* Guardar */}
                 <TouchableOpacity
                     style={[styles.saveBtn, { backgroundColor: c.primary }]}
@@ -132,6 +158,7 @@ const EditProfileScreen = ({ navigation }) => {
                     )}
                 </TouchableOpacity>
             </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 };

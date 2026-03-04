@@ -51,7 +51,7 @@ export const searchCities = async (query) => {
             `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim())}&format=json&addressdetails=1&limit=7`,
             {
                 headers: {
-                    'User-Agent': 'OutfitVault/1.0 (educational project)',
+                    'User-Agent': 'Wearo/1.0 (educational project)',
                     'Accept-Language': 'es',
                 },
             }

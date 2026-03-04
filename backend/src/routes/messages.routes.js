@@ -25,7 +25,15 @@ router.post('/conversation', startConversation);
 router.get('/:conversationId', getMessages);
 
 // POST /api/v1/messages/:conversationId — Enviar mensaje (con media opcional)
-router.post('/:conversationId', msgUpload.single('media'), sendMessage);
+router.post('/:conversationId', (req, res, next) => {
+    msgUpload.single('media')(req, res, (err) => {
+        if (err) {
+            console.error('Multer error:', err.message);
+            return res.status(400).json({ error: true, mensaje: err.message });
+        }
+        next();
+    });
+}, sendMessage);
 
 // PUT /api/v1/messages/:conversationId/read — Marcar como leídos
 router.put('/:conversationId/read', markRead);

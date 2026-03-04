@@ -2,12 +2,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, Modal, TextInput, Image, ScrollView,
-    StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
+    StyleSheet, ActivityIndicator, StatusBar, RefreshControl, Pressable,
     KeyboardAvoidingView, Platform, Alert, Dimensions, Animated, Keyboard,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchFeed, toggleLike, shareOutfit, unshareOutfit, resetFeed, fetchComments, addComment, removeComment } from '../store/socialSlice';
 import { fetchOutfits } from '../store/outfitsSlice';
+import { fetchGarments } from '../store/wardrobeSlice';
 import { fetchConversations, startConversation } from '../store/messagesSlice';
 import { sendSharedPostMessage } from '../services/messages.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,9 +16,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../hooks/useTheme';
 import { IMAGE_BASE_URL } from '../services/api';
 import { searchSocial, getLikers } from '../services/social.service';
+import { toggleUser as adminToggleUser, deletePost as adminDeletePost } from '../services/admin.service';
 import ScreenHeader from '../components/ScreenHeader';
 import EmptyState from '../components/EmptyState';
 import GarmentCarousel from '../components/GarmentCarousel';
+
+const WEARO_LOGO = require('../../assets/logo.png');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -25,6 +29,7 @@ const SocialScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { feed, hasMore, isLoading, isRefreshing, comments, commentsLoading } = useSelector((state) => state.social);
     const { outfits } = useSelector((state) => state.outfits);
+    const { garments } = useSelector((state) => state.wardrobe);
     const { user } = useSelector((state) => state.auth);
     const currentUserId = useSelector((s) => s.auth.user?.id);
     const { theme } = useTheme();
@@ -34,6 +39,8 @@ const SocialScreen = ({ navigation }) => {
     const [caption, setCaption] = useState('');
     const [selectedOutfitId, setSelectedOutfitId] = useState(null);
     const [sharePhotos, setSharePhotos] = useState([]);
+    const [shareTab, setShareTab] = useState('outfits'); // 'outfits' | 'garments'
+    const [selectedShareGarmentIds, setSelectedShareGarmentIds] = useState([]);
     const [feedMode, setFeedMode] = useState('discover'); // 'discover' | 'following'
     const [showSearch, setShowSearch] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -45,7 +52,8 @@ const SocialScreen = ({ navigation }) => {
     const [commentsPostId, setCommentsPostId] = useState(null);
     const [showComments, setShowComments] = useState(false);
     const [commentInput, setCommentInput] = useState('');
-    const [replyingTo, setReplyingTo] = useState(null); // { id, fullName }
+    const [replyingTo, setReplyingTo] = useState(null); // { id, fullName, parentId }
+    const [expandedReplies, setExpandedReplies] = useState({}); // { [commentId]: true }
     const commentInputRef = useRef(null);
     // Post detail state
     const [selectedPost, setSelectedPost] = useState(null);
@@ -69,13 +77,16 @@ const SocialScreen = ({ navigation }) => {
         setCommentsPostId(postId);
         setCommentInput('');
         setReplyingTo(null);
+        setExpandedReplies({});
         setShowComments(true);
         dispatch(fetchComments(postId));
     };
 
     const handleReplyTo = (comment) => {
         const name = comment.author?.fullName || 'Usuario';
-        setReplyingTo({ id: comment.id, fullName: name });
+        // If replying to a reply, set parentId to the top-level parent (only 1 level of nesting)
+        const parentId = comment.parent_id ? comment.parent_id : comment.id;
+        setReplyingTo({ id: comment.id, fullName: name, parentId });
         setCommentInput(`@${name} `);
         setTimeout(() => commentInputRef.current?.focus(), 100);
     };
@@ -85,12 +96,17 @@ const SocialScreen = ({ navigation }) => {
         setCommentInput('');
     };
 
+    const toggleReplies = (commentId) => {
+        setExpandedReplies((prev) => ({ ...prev, [commentId]: !prev[commentId] }));
+    };
+
     const handleSendComment = () => {
         const text = commentInput.trim();
         if (!text || !commentsPostId) return;
         setCommentInput('');
+        const parentId = replyingTo?.parentId || null;
         setReplyingTo(null);
-        dispatch(addComment({ postId: commentsPostId, text }));
+        dispatch(addComment({ postId: commentsPostId, text, parentId }));
     };
 
     const handleDeleteComment = (commentId) => {
@@ -147,6 +163,8 @@ const SocialScreen = ({ navigation }) => {
         dispatch(toggleLike({ sharedId: post.id, isLiked: post.liked_by_me }));
     };
 
+    const isAdmin = user?.role === 'admin';
+
     const handleDeletePost = (post) => {
         Alert.alert(
             'Eliminar publicación',
@@ -158,21 +176,80 @@ const SocialScreen = ({ navigation }) => {
         );
     };
 
+    const handleAdminMenu = (post) => {
+        const author = post.author || {};
+        const isMe = post.user_id === currentUserId || author.id === currentUserId;
+        const buttons = [];
+        if (!isMe) {
+            buttons.push({
+                text: 'Desactivar usuario',
+                style: 'destructive',
+                onPress: () => {
+                    Alert.alert(
+                        'Desactivar usuario',
+                        `¿Desactivar la cuenta de ${author.fullName || 'este usuario'}? No podrá iniciar sesión.`,
+                        [
+                            { text: 'Cancelar', style: 'cancel' },
+                            {
+                                text: 'Desactivar', style: 'destructive',
+                                onPress: async () => {
+                                    try {
+                                        await adminToggleUser(author.id, true);
+                                        Alert.alert('Hecho', 'Usuario desactivado.');
+                                    } catch {
+                                        Alert.alert('Error', 'No se pudo desactivar.');
+                                    }
+                                },
+                            },
+                        ]
+                    );
+                },
+            });
+        }
+        buttons.push({
+            text: 'Eliminar publicación',
+            style: 'destructive',
+            onPress: () => dispatch(unshareOutfit(post.id)),
+        });
+        buttons.push({ text: 'Ver perfil', onPress: () => navigation.navigate('UserProfile', { userId: author.id, ...(author.isAdmin ? { isWearo: true } : {}) }) });
+        buttons.push({ text: 'Cancelar', style: 'cancel' });
+        Alert.alert('Moderación', `Post de ${author.fullName || 'Usuario'}`, buttons);
+    };
+
     const openShareModal = () => {
         dispatch(fetchOutfits());
+        dispatch(fetchGarments());
         setCaption('');
         setSelectedOutfitId(null);
         setSharePhotos([]);
+        setShareTab('outfits');
+        setSelectedShareGarmentIds([]);
         setShowShareModal(true);
     };
 
     const handleShare = () => {
-        if (!selectedOutfitId) return;
-        dispatch(shareOutfit({ outfitId: selectedOutfitId, caption, photos: sharePhotos }));
+        if (!isAdmin) {
+            if (shareTab === 'outfits' && !selectedOutfitId) return;
+            if (shareTab === 'garments' && selectedShareGarmentIds.length === 0) return;
+        }
+        if (isAdmin && !caption.trim() && sharePhotos.length === 0) return;
+        dispatch(shareOutfit({
+            outfitId: (!isAdmin && shareTab === 'outfits') ? selectedOutfitId : null,
+            caption,
+            photos: sharePhotos,
+            garmentIds: (!isAdmin && shareTab === 'garments') ? selectedShareGarmentIds : [],
+        }));
         setShowShareModal(false);
         setCaption('');
         setSelectedOutfitId(null);
         setSharePhotos([]);
+        setSelectedShareGarmentIds([]);
+    };
+
+    const toggleShareGarment = (id) => {
+        setSelectedShareGarmentIds((prev) =>
+            prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+        );
     };
 
     const pickSharePhotos = async () => {
@@ -260,11 +337,16 @@ const SocialScreen = ({ navigation }) => {
                 <View style={styles.postHeader}>
                     <TouchableOpacity
                         style={styles.postHeaderUser}
-                        onPress={() => navigation.navigate('UserProfile', { userId: author.id })}
+                        onPress={() => author.isAdmin
+                            ? navigation.navigate('UserProfile', { userId: author.id, isWearo: true })
+                            : navigation.navigate('UserProfile', { userId: author.id })
+                        }
                         activeOpacity={0.7}
                     >
-                        <View style={[styles.avatar, { backgroundColor: c.primary + '20' }]}>
-                            {author.avatarUrl ? (
+                        <View style={[styles.avatar, { backgroundColor: author.isAdmin ? 'transparent' : (c.primary + '20') }]}>
+                            {author.isAdmin ? (
+                                <Image source={WEARO_LOGO} style={styles.avatarImg} resizeMode="cover" />
+                            ) : author.avatarUrl ? (
                                 <Image source={{ uri: `${IMAGE_BASE_URL}${author.avatarUrl}` }} style={styles.avatarImg} />
                             ) : (
                                 <Text style={[styles.avatarText, { color: c.primary }]}>
@@ -287,25 +369,30 @@ const SocialScreen = ({ navigation }) => {
                             )}
                         </View>
                     </TouchableOpacity>
-                    {isMe && (
+                    {(isMe || isAdmin) && (
                         <TouchableOpacity
-                            onPress={() => handleDeletePost(post)}
+                            onPress={() => isAdmin && !isMe ? handleAdminMenu(post) : handleDeletePost(post)}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             style={styles.menuBtn}
                         >
-                            <Ionicons name="ellipsis-horizontal" size={22} color={c.textMuted} />
+                            <Ionicons name={isAdmin && !isMe ? 'shield-checkmark' : 'ellipsis-horizontal'} size={22} color={isAdmin && !isMe ? c.primary : c.textMuted} />
                         </TouchableOpacity>
                     )}
                 </View>
 
-                {/* Outfit info bar — tappable to see detail */}
+                {/* Outfit info bar — tappable to see detail (skip for admin announcements) */}
+                {outfit.id && (
                 <TouchableOpacity
                     style={[styles.outfitBox, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}
                     onPress={() => setSelectedPost(post)}
                     activeOpacity={0.7}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Ionicons name="albums-outline" size={16} color={c.text} style={{ marginRight: 6 }} />
+                        {outfit.cover_image ? (
+                            <Image source={{ uri: `${IMAGE_BASE_URL}${outfit.cover_image}` }} style={styles.outfitBoxThumb} />
+                        ) : (
+                            <Ionicons name="albums-outline" size={16} color={c.text} style={{ marginRight: 6 }} />
+                        )}
                         <Text style={[styles.outfitName, { color: c.text }]}>{outfit.name || 'Outfit'}</Text>
                     </View>
                     {outfit.occasion && (
@@ -314,24 +401,11 @@ const SocialScreen = ({ navigation }) => {
                         </View>
                     )}
                 </TouchableOpacity>
-
-                {/* User-uploaded photos */}
-                {photos.length > 0 && (
-                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.postPhotosRow}>
-                        {photos.map((photoUrl, idx) => (
-                            <Image
-                                key={idx}
-                                source={{ uri: `${IMAGE_BASE_URL}${photoUrl}` }}
-                                style={styles.postPhoto}
-                                resizeMode="cover"
-                            />
-                        ))}
-                    </ScrollView>
                 )}
 
-                {/* Garment carousel — full-width auto-sliding + swipeable */}
-                {garments.length > 0 && (
-                    <GarmentCarousel garments={garments} height={Math.round(SCREEN_WIDTH * 0.85)} />
+                {/* Garment carousel with photos as first slides */}
+                {((author.isAdmin ? 0 : garments.length) > 0 || photos.length > 0) && (
+                    <GarmentCarousel garments={author.isAdmin ? [] : garments} photos={photos} height={Math.round(SCREEN_WIDTH * 0.85)} hidePhotoLabel={!!author.isAdmin} />
                 )}
 
                 {/* F1: Instagram-style action bar — icons only */}
@@ -344,9 +418,11 @@ const SocialScreen = ({ navigation }) => {
                     <TouchableOpacity style={styles.actionBtn} onPress={() => openComments(post.id)} activeOpacity={0.6}>
                         <Ionicons name="chatbubble-outline" size={23} color={c.text} />
                     </TouchableOpacity>
+                    {!author.isAdmin && (
                     <TouchableOpacity style={styles.actionBtn} onPress={() => setSelectedPost(post)} activeOpacity={0.6}>
                         <Ionicons name="shirt-outline" size={21} color={c.text} />
                     </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={styles.actionBtn} onPress={() => handleOpenShareDM(post.id)} activeOpacity={0.6}>
                         <Ionicons name="paper-plane-outline" size={21} color={c.text} />
                     </TouchableOpacity>
@@ -376,10 +452,10 @@ const SocialScreen = ({ navigation }) => {
                     </View>
                 ) : null}
 
-                {/* Inline comments */}
-                {(comments[post.id] || []).length > 0 && (
+                {/* Inline comments (top-level only) */}
+                {(comments[post.id] || []).filter((cm) => !cm.parent_id).length > 0 && (
                     <View style={styles.inlineComments}>
-                        {(comments[post.id] || []).map((comment) => (
+                        {(comments[post.id] || []).filter((cm) => !cm.parent_id).slice(0, 3).map((comment) => (
                             <View key={comment.id} style={styles.inlineCommentRow}>
                                 <Text style={[styles.inlineCommentAuthor, { color: c.text }]}>
                                     {comment.author?.fullName || 'Usuario'}
@@ -400,9 +476,13 @@ const SocialScreen = ({ navigation }) => {
                 </TouchableOpacity>
 
                 {/* Garment count */}
+                {garments.length > 0 && (
                 <Text style={[styles.garmentCountText, { color: c.textMuted }]}>
                     {garments.length} prenda{garments.length !== 1 ? 's' : ''}
                 </Text>
+                )}
+
+                <View style={{ height: 12 }} />
             </View>
         );
     };
@@ -431,7 +511,7 @@ const SocialScreen = ({ navigation }) => {
                         activeOpacity={0.7}
                     >
                         <Ionicons name="add" size={16} color="#FFF" />
-                        <Text style={styles.shareHeaderBtnText}>Compartir</Text>
+                        <Text style={styles.shareHeaderBtnText}>{isAdmin ? 'Anuncio' : 'Compartir'}</Text>
                     </TouchableOpacity>
                 }
             />
@@ -511,8 +591,10 @@ const SocialScreen = ({ navigation }) => {
                                         {/* Author header */}
                                         <View style={styles.postHeader}>
                                             <View style={styles.postHeaderUser}>
-                                                <View style={[styles.avatar, { backgroundColor: c.primary + '20' }]}>
-                                                    {author.avatarUrl ? (
+                                                <View style={[styles.avatar, { backgroundColor: author.isAdmin ? 'transparent' : (c.primary + '20') }]}>
+                                                    {author.isAdmin ? (
+                                                        <Image source={WEARO_LOGO} style={styles.avatarImg} resizeMode="cover" />
+                                                    ) : author.avatarUrl ? (
                                                         <Image source={{ uri: `${IMAGE_BASE_URL}${author.avatarUrl}` }} style={styles.avatarImg} />
                                                     ) : (
                                                         <Text style={[styles.avatarText, { color: c.primary }]}>
@@ -534,7 +616,11 @@ const SocialScreen = ({ navigation }) => {
                                         {/* Outfit info */}
                                         <View style={[styles.outfitBox, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                                <Ionicons name="albums-outline" size={16} color={c.text} style={{ marginRight: 6 }} />
+                                                {outfit.cover_image ? (
+                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${outfit.cover_image}` }} style={styles.outfitBoxThumb} />
+                                                ) : (
+                                                    <Ionicons name="albums-outline" size={16} color={c.text} style={{ marginRight: 6 }} />
+                                                )}
                                                 <Text style={[styles.outfitName, { color: c.text }]}>{outfit.name || 'Outfit'}</Text>
                                             </View>
                                             {outfit.occasion && (
@@ -544,23 +630,9 @@ const SocialScreen = ({ navigation }) => {
                                             )}
                                         </View>
 
-                                        {/* Photos */}
-                                        {photos.length > 0 && (
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.postPhotosRow} contentContainerStyle={styles.postPhotosContent}>
-                                                {photos.map((photoUrl, idx) => (
-                                                    <Image
-                                                        key={idx}
-                                                        source={{ uri: `${IMAGE_BASE_URL}${photoUrl}` }}
-                                                        style={styles.postPhoto}
-                                                        resizeMode="cover"
-                                                    />
-                                                ))}
-                                            </ScrollView>
-                                        )}
-
-                                        {/* Garment carousel */}
-                                        {postGarments.length > 0 && (
-                                            <GarmentCarousel garments={postGarments} height={Math.round(SCREEN_WIDTH * 0.7)} />
+                                        {/* Garment carousel with photos */}
+                                        {(postGarments.length > 0 || photos.length > 0) && (
+                                            <GarmentCarousel garments={postGarments} photos={photos} height={Math.round(SCREEN_WIDTH * 0.7)} />
                                         )}
 
                                         {/* Actions */}
@@ -663,12 +735,12 @@ const SocialScreen = ({ navigation }) => {
                             </View>
                         )}
 
-                        {/* Comments list */}
+                        {/* Comments list — nested replies */}
                         {commentsLoading ? (
                             <ActivityIndicator style={{ paddingVertical: 32 }} color={c.primary} />
                         ) : (
                             <FlatList
-                                data={commentsPostId ? (comments[commentsPostId] || []) : []}
+                                data={commentsPostId ? (comments[commentsPostId] || []).filter((cm) => !cm.parent_id) : []}
                                 keyExtractor={(item) => item.id.toString()}
                                 style={{ flex: 1 }}
                                 contentContainerStyle={{ paddingVertical: 4 }}
@@ -677,56 +749,141 @@ const SocialScreen = ({ navigation }) => {
                                         <Ionicons name="chatbubble-outline" size={40} color={c.textMuted} style={{ marginBottom: 8 }} />
                                         <Text style={[styles.emptyCommentsTitle, { color: c.text }]}>Sin comentarios</Text>
                                         <Text style={[styles.emptyCommentsText, { color: c.textMuted }]}>
-                                            Sé el primero en comentar.
+                                            Se el primero en comentar.
                                         </Text>
                                     </View>
                                 }
                                 renderItem={({ item: comment }) => {
-                                    const isOwn = comment.author?.id === user?.id;
+                                    const isOwn = comment.author?.id === user?.id || isAdmin;
+                                    const allComments = commentsPostId ? (comments[commentsPostId] || []) : [];
+                                    const replies = allComments.filter((cm) => cm.parent_id === comment.id);
+                                    const isExpanded = expandedReplies[comment.id];
                                     return (
-                                        <View style={[styles.commentCard, { backgroundColor: c.background }]}>
-                                            <View style={[styles.commentAvatar, { backgroundColor: c.primary + '20' }]}>
-                                                {comment.author?.avatarUrl ? (
-                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${comment.author.avatarUrl}` }} style={styles.commentAvatarImg} />
-                                                ) : (
-                                                    <Text style={[styles.commentAvatarText, { color: c.primary }]}>
-                                                        {(comment.author?.fullName || '?')[0].toUpperCase()}
-                                                    </Text>
-                                                )}
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <View style={styles.commentMeta}>
-                                                    <Text style={[styles.commentAuthorBold, { color: c.text }]}>
-                                                        {comment.author?.fullName || 'Usuario'}
-                                                    </Text>
-                                                    <Text style={[styles.commentTime, { color: c.textMuted }]}>
-                                                        {getTimeAgo(comment.created_at)}
-                                                    </Text>
+                                        <View>
+                                            {/* Top-level comment */}
+                                            <View style={[styles.commentCard, { backgroundColor: c.background }]}>
+                                                <View style={[styles.commentAvatar, { backgroundColor: c.primary + '20' }]}>
+                                                    {comment.author?.avatarUrl ? (
+                                                        <Image source={{ uri: `${IMAGE_BASE_URL}${comment.author.avatarUrl}` }} style={styles.commentAvatarImg} />
+                                                    ) : (
+                                                        <Text style={[styles.commentAvatarText, { color: c.primary }]}>
+                                                            {(comment.author?.fullName || '?')[0].toUpperCase()}
+                                                        </Text>
+                                                    )}
                                                 </View>
-                                                <Text style={[styles.commentTextBody, { color: c.text }]}>
-                                                    {comment.text}
-                                                </Text>
-                                                <View style={styles.commentActions}>
-                                                    <TouchableOpacity
-                                                        onPress={() => handleReplyTo(comment)}
-                                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                                        style={styles.commentReplyBtn}
-                                                    >
-                                                        <Ionicons name="arrow-undo-outline" size={14} color={c.textMuted} />
-                                                        <Text style={[styles.commentReplyText, { color: c.textMuted }]}>Responder</Text>
-                                                    </TouchableOpacity>
-                                                    {isOwn && (
+                                                <View style={{ flex: 1 }}>
+                                                    <View style={styles.commentMeta}>
+                                                        <Text style={[styles.commentAuthorBold, { color: c.text }]}>
+                                                            {comment.author?.fullName || 'Usuario'}
+                                                        </Text>
+                                                        <Text style={[styles.commentTime, { color: c.textMuted }]}>
+                                                            {getTimeAgo(comment.created_at)}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={[styles.commentTextBody, { color: c.text }]}>
+                                                        {comment.text}
+                                                    </Text>
+                                                    <View style={styles.commentActions}>
                                                         <TouchableOpacity
-                                                            onPress={() => handleDeleteComment(comment.id)}
+                                                            onPress={() => handleReplyTo(comment)}
                                                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                                             style={styles.commentReplyBtn}
                                                         >
-                                                            <Ionicons name="trash-outline" size={14} color={c.error} />
-                                                            <Text style={[styles.commentReplyText, { color: c.error }]}>Eliminar</Text>
+                                                            <Ionicons name="arrow-undo-outline" size={14} color={c.textMuted} />
+                                                            <Text style={[styles.commentReplyText, { color: c.textMuted }]}>Responder</Text>
                                                         </TouchableOpacity>
-                                                    )}
+                                                        {isOwn && (
+                                                            <TouchableOpacity
+                                                                onPress={() => handleDeleteComment(comment.id)}
+                                                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                                                style={styles.commentReplyBtn}
+                                                            >
+                                                                <Ionicons name="trash-outline" size={14} color={c.error} />
+                                                                <Text style={[styles.commentReplyText, { color: c.error }]}>Eliminar</Text>
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
                                                 </View>
                                             </View>
+
+                                            {/* "Ver respuestas" toggle */}
+                                            {replies.length > 0 && !isExpanded && (
+                                                <TouchableOpacity
+                                                    style={styles.viewRepliesBtn}
+                                                    onPress={() => toggleReplies(comment.id)}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <View style={[styles.replyLine, { backgroundColor: c.border }]} />
+                                                    <Text style={[styles.viewRepliesText, { color: c.primary }]}>
+                                                        Ver {replies.length} respuesta{replies.length !== 1 ? 's' : ''}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            )}
+
+                                            {/* Expanded replies */}
+                                            {isExpanded && replies.map((reply) => {
+                                                const isReplyOwn = reply.author?.id === user?.id || isAdmin;
+                                                return (
+                                                    <View key={reply.id} style={[styles.commentCard, styles.replyCard, { backgroundColor: c.background }]}>
+                                                        <View style={[styles.commentAvatar, styles.replyAvatar, { backgroundColor: c.primary + '20' }]}>
+                                                            {reply.author?.avatarUrl ? (
+                                                                <Image source={{ uri: `${IMAGE_BASE_URL}${reply.author.avatarUrl}` }} style={styles.replyAvatarImg} />
+                                                            ) : (
+                                                                <Text style={[styles.commentAvatarText, { color: c.primary, fontSize: 11 }]}>
+                                                                    {(reply.author?.fullName || '?')[0].toUpperCase()}
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <View style={styles.commentMeta}>
+                                                                <Text style={[styles.commentAuthorBold, { color: c.text, fontSize: 13 }]}>
+                                                                    {reply.author?.fullName || 'Usuario'}
+                                                                </Text>
+                                                                <Text style={[styles.commentTime, { color: c.textMuted }]}>
+                                                                    {getTimeAgo(reply.created_at)}
+                                                                </Text>
+                                                            </View>
+                                                            <Text style={[styles.commentTextBody, { color: c.text, fontSize: 13 }]}>
+                                                                {reply.text}
+                                                            </Text>
+                                                            <View style={styles.commentActions}>
+                                                                <TouchableOpacity
+                                                                    onPress={() => handleReplyTo(reply)}
+                                                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                                                    style={styles.commentReplyBtn}
+                                                                >
+                                                                    <Ionicons name="arrow-undo-outline" size={13} color={c.textMuted} />
+                                                                    <Text style={[styles.commentReplyText, { color: c.textMuted }]}>Responder</Text>
+                                                                </TouchableOpacity>
+                                                                {isReplyOwn && (
+                                                                    <TouchableOpacity
+                                                                        onPress={() => handleDeleteComment(reply.id)}
+                                                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                                                        style={styles.commentReplyBtn}
+                                                                    >
+                                                                        <Ionicons name="trash-outline" size={13} color={c.error} />
+                                                                        <Text style={[styles.commentReplyText, { color: c.error }]}>Eliminar</Text>
+                                                                    </TouchableOpacity>
+                                                                )}
+                                                            </View>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
+
+                                            {/* Hide replies button */}
+                                            {isExpanded && replies.length > 0 && (
+                                                <TouchableOpacity
+                                                    style={styles.viewRepliesBtn}
+                                                    onPress={() => toggleReplies(comment.id)}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <View style={[styles.replyLine, { backgroundColor: c.border }]} />
+                                                    <Text style={[styles.viewRepliesText, { color: c.textMuted }]}>
+                                                        Ocultar respuestas
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
                                     );
                                 }}
@@ -771,52 +928,194 @@ const SocialScreen = ({ navigation }) => {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Modal: Compartir outfit (F3 enhancements) */}
+            {/* Modal: Compartir outfit o prendas */}
             <Modal visible={showShareModal} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+                    <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss} />
                     <View style={[styles.modalContent, { backgroundColor: c.surface }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: c.text }]}>Compartir Outfit</Text>
+                            <Text style={[styles.modalTitle, { color: c.text }]}>
+                                {isAdmin ? 'Nuevo Anuncio' : 'Compartir'}
+                            </Text>
                             <TouchableOpacity onPress={() => setShowShareModal(false)}>
                                 <Ionicons name="close" size={22} color={c.primary} />
                             </TouchableOpacity>
                         </View>
 
-                        {/* F3: Select outfit first */}
-                        <Text style={[styles.selectLabel, { color: c.textSecondary }]}>Selecciona un outfit:</Text>
-                        <FlatList
-                            data={outfits}
-                            keyExtractor={(item) => item.id.toString()}
-                            style={{ maxHeight: 220 }}
-                            renderItem={({ item }) => {
-                                const isSelected = selectedOutfitId === item.id;
-                                return (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.outfitOption,
-                                            { borderBottomColor: c.border },
-                                            isSelected && { backgroundColor: c.primary + '10' },
-                                        ]}
-                                        onPress={() => setSelectedOutfitId(item.id)}
-                                    >
-                                        <Ionicons name={isSelected ? 'checkmark-circle' : 'albums-outline'} size={22} color={isSelected ? c.primary : c.textMuted} style={{ marginRight: 10 }} />
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
-                                            <Text style={[styles.optionMeta, { color: c.textMuted }]}>
-                                                {item.occasion || 'Sin ocasión'} · {item.garments?.length || 0} prendas
-                                            </Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            }}
-                            ListEmptyComponent={
-                                <Text style={[styles.emptyPicker, { color: c.textMuted }]}>
-                                    No tienes outfits. Crea uno primero.
-                                </Text>
-                            }
-                        />
+                        {/* Admin: solo caption + fotos para anuncios */}
+                        {isAdmin ? (
+                            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                                <View style={[styles.adminAnnounceBanner, { backgroundColor: c.primary + '10', borderColor: c.primary + '30' }]}>
+                                    <Ionicons name="megaphone-outline" size={20} color={c.primary} />
+                                    <Text style={[styles.adminAnnounceText, { color: c.primary }]}>
+                                        Se publicará como Wearo con el logo de la app.
+                                    </Text>
+                                </View>
 
-                        {/* F3: Caption TextInput before the share button */}
+                                <Text style={[styles.selectLabel, { color: c.textSecondary }]}>Mensaje del anuncio:</Text>
+                                <TextInput
+                                    style={[styles.captionInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText }]}
+                                    placeholder="Escribe tu anuncio aquí..."
+                                    placeholderTextColor={c.placeholder}
+                                    value={caption}
+                                    onChangeText={setCaption}
+                                    multiline
+                                    maxLength={500}
+                                />
+                                <Text style={[styles.charCount, { color: c.textMuted }]}>{caption.length}/500</Text>
+
+                                <Text style={[styles.selectLabel, { color: c.textSecondary }]}>Fotos (opcional, max 5):</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoPickerRow} contentContainerStyle={styles.photoPickerContent}>
+                                    {sharePhotos.map((uri, idx) => (
+                                        <View key={idx} style={styles.photoThumbWrap}>
+                                            <Image source={{ uri }} style={styles.photoThumb} />
+                                            <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removeSharePhoto(idx)}>
+                                                <Ionicons name="close-circle" size={20} color="#FFF" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                    {sharePhotos.length < 5 && (
+                                        <TouchableOpacity style={[styles.photoAddBtn, { borderColor: c.border, backgroundColor: c.surfaceVariant }]} onPress={pickSharePhotos}>
+                                            <Ionicons name="camera-outline" size={24} color={c.textMuted} />
+                                            <Text style={[styles.photoAddText, { color: c.textMuted }]}>Añadir</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </ScrollView>
+
+                                <TouchableOpacity
+                                    style={[styles.shareBtn, { backgroundColor: (caption.trim() || sharePhotos.length > 0) ? c.primary : c.border }]}
+                                    onPress={handleShare}
+                                    disabled={!caption.trim() && sharePhotos.length === 0}
+                                    activeOpacity={0.7}
+                                >
+                                    {(caption.trim() || sharePhotos.length > 0) ? (
+                                        <View style={styles.shareBtnInner}>
+                                            <Ionicons name="megaphone-outline" size={16} color="#FFF" />
+                                            <Text style={styles.shareBtnText}>Publicar Anuncio</Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.shareBtnText}>Escribe un anuncio</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </ScrollView>
+                        ) : (
+                            <View>
+
+                        {/* Tabs: Outfits / Armario */}
+                        <View style={[styles.pickerTabs, { borderBottomColor: c.border }]}>
+                            <TouchableOpacity
+                                style={[styles.pickerTab, shareTab === 'outfits' && { borderBottomColor: c.primary }]}
+                                onPress={() => setShareTab('outfits')}
+                            >
+                                <Ionicons name="albums-outline" size={16} color={shareTab === 'outfits' ? c.primary : c.textMuted} />
+                                <Text style={[styles.pickerTabText, { color: shareTab === 'outfits' ? c.primary : c.textMuted }]}>
+                                    Outfits
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.pickerTab, shareTab === 'garments' && { borderBottomColor: c.primary }]}
+                                onPress={() => setShareTab('garments')}
+                            >
+                                <Ionicons name="shirt-outline" size={16} color={shareTab === 'garments' ? c.primary : c.textMuted} />
+                                <Text style={[styles.pickerTabText, { color: shareTab === 'garments' ? c.primary : c.textMuted }]}>
+                                    Armario
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Outfits list */}
+                        {shareTab === 'outfits' && (
+                            <FlatList
+                                data={outfits}
+                                keyExtractor={(item) => item.id.toString()}
+                                style={{ maxHeight: 180 }}
+                                renderItem={({ item }) => {
+                                    const isSelected = selectedOutfitId === item.id;
+                                    return (
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.outfitOption,
+                                                { borderBottomColor: c.border },
+                                                isSelected && { backgroundColor: c.primary + '10' },
+                                            ]}
+                                            onPress={() => setSelectedOutfitId(item.id)}
+                                        >
+                                            <View style={[styles.garmentOptionImg, { backgroundColor: c.surfaceVariant, borderColor: isSelected ? c.primary : c.border }]}>
+                                                {item.cover_image ? (
+                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${item.cover_image}` }} style={styles.garmentOptionImgInner} />
+                                                ) : (
+                                                    <Ionicons name="albums-outline" size={20} color={isSelected ? c.primary : c.textMuted} />
+                                                )}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
+                                                <Text style={[styles.optionMeta, { color: c.textMuted }]}>
+                                                    {item.occasion || 'Sin ocasión'} · {item.garments?.length || 0} prendas
+                                                </Text>
+                                            </View>
+                                            <Ionicons
+                                                name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                                                size={22}
+                                                color={isSelected ? c.primary : c.textMuted}
+                                            />
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                ListEmptyComponent={
+                                    <Text style={[styles.emptyPicker, { color: c.textMuted }]}>
+                                        No tienes outfits. Crea uno primero.
+                                    </Text>
+                                }
+                            />
+                        )}
+
+                        {/* Garments multi-select */}
+                        {shareTab === 'garments' && (
+                            <FlatList
+                                data={garments}
+                                keyExtractor={(item) => item.id.toString()}
+                                style={{ maxHeight: 180 }}
+                                renderItem={({ item }) => {
+                                    const isSelected = selectedShareGarmentIds.includes(item.id);
+                                    return (
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.outfitOption,
+                                                { borderBottomColor: c.border },
+                                                isSelected && { backgroundColor: c.primary + '10' },
+                                            ]}
+                                            onPress={() => toggleShareGarment(item.id)}
+                                        >
+                                            <View style={[styles.garmentOptionImg, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+                                                {item.image_url ? (
+                                                    <Image source={{ uri: `${IMAGE_BASE_URL}${item.image_url}` }} style={styles.garmentOptionImgInner} />
+                                                ) : (
+                                                    <Ionicons name="shirt-outline" size={18} color={c.textMuted} />
+                                                )}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
+                                                <Text style={[styles.optionMeta, { color: c.textMuted }]}>
+                                                    {item.category || 'Sin categoría'}{item.color ? ` · ${item.color}` : ''}
+                                                </Text>
+                                            </View>
+                                            <Ionicons
+                                                name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
+                                                size={22}
+                                                color={isSelected ? c.primary : c.textMuted}
+                                            />
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                                ListEmptyComponent={
+                                    <Text style={[styles.emptyPicker, { color: c.textMuted }]}>
+                                        No tienes prendas. Ve a Armario para añadir.
+                                    </Text>
+                                }
+                            />
+                        )}
+
+                        {/* Caption */}
                         <Text style={[styles.selectLabel, { color: c.textSecondary, marginTop: 12 }]}>Escribe un mensaje (opcional):</Text>
                         <TextInput
                             style={[styles.captionInput, { backgroundColor: c.inputBg, borderColor: c.inputBorder, color: c.inputText }]}
@@ -852,23 +1151,27 @@ const SocialScreen = ({ navigation }) => {
                         <TouchableOpacity
                             style={[
                                 styles.shareBtn,
-                                { backgroundColor: selectedOutfitId ? c.primary : c.border },
+                                { backgroundColor: (shareTab === 'outfits' ? selectedOutfitId : selectedShareGarmentIds.length > 0) ? c.primary : c.border },
                             ]}
                             onPress={handleShare}
-                            disabled={!selectedOutfitId}
+                            disabled={shareTab === 'outfits' ? !selectedOutfitId : selectedShareGarmentIds.length === 0}
                             activeOpacity={0.7}
                         >
-                            {selectedOutfitId ? (
+                            {(shareTab === 'outfits' ? selectedOutfitId : selectedShareGarmentIds.length > 0) ? (
                                 <View style={styles.shareBtnInner}>
                                     <Ionicons name="paper-plane-outline" size={16} color="#FFF" />
                                     <Text style={styles.shareBtnText}>Compartir al Feed</Text>
                                 </View>
                             ) : (
-                                <Text style={styles.shareBtnText}>Selecciona un outfit</Text>
+                                <Text style={styles.shareBtnText}>
+                                    {shareTab === 'outfits' ? 'Selecciona un outfit' : 'Selecciona prendas'}
+                                </Text>
                             )}
                         </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Modal: Búsqueda */}
@@ -1155,6 +1458,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4,
     },
     outfitName: { fontSize: 14, fontWeight: '700', flex: 1 },
+    outfitBoxThumb: { width: 28, height: 28, borderRadius: 6, marginRight: 8 },
     occasionBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
     occasionText: { fontSize: 11, fontWeight: '600' },
 
@@ -1311,6 +1615,14 @@ const styles = StyleSheet.create({
     commentInput: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, fontSize: 14 },
     commentSendBtn: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 
+    // Nested replies
+    replyCard: { marginLeft: 44, paddingVertical: 8 },
+    replyAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8 },
+    replyAvatarImg: { width: 28, height: 28, borderRadius: 14 },
+    viewRepliesBtn: { flexDirection: 'row', alignItems: 'center', marginLeft: 54, paddingVertical: 6, gap: 8 },
+    replyLine: { width: 24, height: 1 },
+    viewRepliesText: { fontSize: 13, fontWeight: '600' },
+
     // Post photos (user-uploaded)
     postPhotosRow: { marginTop: 0 },
     postPhotosContent: { gap: 0 },
@@ -1327,6 +1639,31 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center', gap: 2,
     },
     photoAddText: { fontSize: 10, fontWeight: '600' },
+
+    // Picker tabs (share modal)
+    pickerTabs: {
+        flexDirection: 'row', borderBottomWidth: 1, marginBottom: 10,
+    },
+    pickerTab: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 6, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent',
+    },
+    pickerTabText: { fontSize: 14, fontWeight: '700' },
+
+    // Garment option images (share modal)
+    garmentOptionImg: {
+        width: 44, height: 44, borderRadius: 10, borderWidth: 1,
+        justifyContent: 'center', alignItems: 'center', marginRight: 10, overflow: 'hidden',
+    },
+    garmentOptionImgInner: { width: 44, height: 44, borderRadius: 10 },
+
+    // Admin announce banner
+    adminAnnounceBanner: {
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+        marginBottom: 14,
+    },
+    adminAnnounceText: { fontSize: 13, fontWeight: '600', flex: 1 },
 });
 
 export default SocialScreen;

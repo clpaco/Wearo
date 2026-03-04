@@ -1,6 +1,15 @@
 // Modelo de Usuario — operaciones de base de datos
 const { query } = require('../config/db');
 
+// Auto-migraciones
+(async () => {
+    try {
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'`);
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT false`);
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_tag VARCHAR(50)`);
+    } catch (e) { /* columnas ya existen */ }
+})();
+
 // Crear un nuevo usuario
 const createUser = async ({ email, passwordHash, fullName }) => {
     const result = await query(
@@ -24,7 +33,7 @@ const findByEmail = async (email) => {
 // Buscar usuario por ID (sin devolver password_hash)
 const findById = async (id) => {
     const result = await query(
-        'SELECT id, email, full_name, avatar_url, created_at, updated_at FROM users WHERE id = $1',
+        'SELECT id, email, full_name, avatar_url, role, created_at, updated_at FROM users WHERE id = $1',
         [id]
     );
     return result.rows[0] || null;

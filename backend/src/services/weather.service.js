@@ -73,7 +73,7 @@ const getWeatherByCity = async (city) => {
         // Geocodificar ciudad con Nominatim
         const geo = await axios.get('https://nominatim.openstreetmap.org/search', {
             params: { q: city, format: 'json', limit: 1 },
-            headers: { 'User-Agent': 'OutfitVault/1.0 (educational project)' },
+            headers: { 'User-Agent': 'Wearo/1.0 (educational project)' },
             timeout: 6000,
         });
         if (!geo.data || geo.data.length === 0) return null;

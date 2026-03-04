@@ -15,12 +15,12 @@ export const fetchFeed = createAsyncThunk(
     }
 );
 
-// Thunk: Compartir outfit (con fotos opcionales)
+// Thunk: Compartir outfit o prendas (con fotos opcionales)
 export const shareOutfit = createAsyncThunk(
     'social/share',
-    async ({ outfitId, caption, photos = [] }, { rejectWithValue }) => {
+    async ({ outfitId, caption, photos = [], garmentIds = [] }, { rejectWithValue }) => {
         try {
-            const data = await socialSvc.shareOutfit(outfitId, caption, photos);
+            const data = await socialSvc.shareOutfit(outfitId, caption, photos, garmentIds);
             return data.post;
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al compartir');
@@ -69,12 +69,12 @@ export const fetchComments = createAsyncThunk(
     }
 );
 
-// Thunk: Añadir comentario
+// Thunk: Añadir comentario (con parentId opcional para respuestas)
 export const addComment = createAsyncThunk(
     'social/addComment',
-    async ({ postId, text }, { rejectWithValue }) => {
+    async ({ postId, text, parentId = null }, { rejectWithValue }) => {
         try {
-            const data = await socialSvc.postComment(postId, text);
+            const data = await socialSvc.postComment(postId, text, parentId);
             return { postId, comment: data.comment };
         } catch (err) {
             return rejectWithValue(err.response?.data?.mensaje || 'Error al comentar');

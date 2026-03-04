@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // En web (PC) usa localhost; en móvil usa la IP de la red local
-const BASE_HOST = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://172.20.10.3:3000';
+const BASE_HOST = Platform.OS === 'web' ? 'http://localhost:3000' : 'http://172.20.10.2:3000';
 const BASE_URL = `${BASE_HOST}/api/v1`;
 export const IMAGE_BASE_URL = BASE_HOST;
 
@@ -34,8 +34,19 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Si el token expiró y no hemos reintentado aún
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Si la cuenta ha sido desactivada, forzar cierre de sesion
+        if (error.response?.status === 403 && error.response?.data?.code === 'ACCOUNT_DISABLED') {
+            await AsyncStorage.removeItem('accessToken');
+            await AsyncStorage.removeItem('refreshToken');
+            await AsyncStorage.removeItem('user');
+            // Forzar recarga para que el estado de auth se resetee
+            if (api._onForceLogout) api._onForceLogout();
+            return Promise.reject(error);
+        }
+
+        // Si el token expiró y no hemos reintentado aún (excluir rutas de auth)
+        if (error.response?.status === 401 && !originalRequest._retry
+            && !originalRequest.url?.includes('/auth/')) {
             originalRequest._retry = true;
 
             try {

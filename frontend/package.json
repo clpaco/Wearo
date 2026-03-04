@@ -1,7 +1,7 @@
 {
-  "name": "outfitvault-frontend",
+  "name": "wearo-frontend",
   "version": "1.0.0",
-  "description": "Aplicación móvil de OutfitVault — React Native con Expo",
+  "description": "Aplicación móvil de Wearo — React Native con Expo",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -21,6 +21,7 @@
     "axios": "^1.13.5",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.33",
+    "expo-av": "~16.0.8",
     "expo-camera": "^17.0.10",
     "expo-image-picker": "~17.0.10",
     "expo-secure-store": "^15.0.8",

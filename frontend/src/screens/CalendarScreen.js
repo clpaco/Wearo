@@ -97,6 +97,8 @@ const CalendarScreen = ({ navigation }) => {
 
     // Abrir picker
     const openPicker = () => {
+        dispatch(fetchOutfits());
+        dispatch(fetchGarments());
         setPickerTab('outfits');
         setSelectedGarmentIds([]);
         setShowPicker(true);
@@ -371,7 +373,13 @@ const CalendarScreen = ({ navigation }) => {
                                         style={[styles.outfitOption, { borderBottomColor: c.border }]}
                                         onPress={() => handleAssignOutfit(item.id)}
                                     >
-                                        <Ionicons name="albums-outline" size={20} color={c.primary} style={{ marginRight: 10 }} />
+                                        <View style={[styles.garmentOptionImg, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+                                            {item.cover_image ? (
+                                                <Image source={{ uri: `${IMAGE_BASE_URL}${item.cover_image}` }} style={styles.garmentOptionImgInner} />
+                                            ) : (
+                                                <Ionicons name="albums-outline" size={20} color={c.primary} />
+                                            )}
+                                        </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
                                             <Text style={[styles.optionMeta, { color: c.textMuted }]}>
@@ -391,7 +399,7 @@ const CalendarScreen = ({ navigation }) => {
 
                         {/* Garments multi-select */}
                         {pickerTab === 'garments' && (
-                            <View style={{ flex: 1 }}>
+                            <View>
                                 <FlatList
                                     data={garments}
                                     keyExtractor={(item) => item.id.toString()}
@@ -475,7 +483,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 8,
     },
     dayCell: {
-        width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center',
+        width: '14.28%', height: 48, justifyContent: 'center', alignItems: 'center',
         borderRadius: 12,
     },
     todayCell: { borderWidth: 2 },

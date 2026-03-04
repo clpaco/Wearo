@@ -1,5 +1,6 @@
 // Servicio de Mensajes Directos — peticiones al backend
 import api from './api';
+import { Platform } from 'react-native';
 
 // Listar conversaciones del usuario
 export const getConversations = async () => {
@@ -42,17 +43,28 @@ export const sendMessage = async (conversationId, text) => {
 // Enviar mensaje con media (foto o audio)
 export const sendMediaMessage = async (conversationId, mediaUri, mediaType) => {
     const formData = new FormData();
-    const ext = mediaType === 'audio' ? 'm4a' : 'jpg';
-    const mime = mediaType === 'audio' ? 'audio/m4a' : 'image/jpeg';
-    formData.append('media', {
-        uri: mediaUri,
-        name: `msg_${Date.now()}.${ext}`,
-        type: mime,
-    });
+    const isWeb = Platform.OS === 'web';
+    const ext = mediaType === 'audio' ? (isWeb ? 'webm' : 'm4a') : 'jpg';
+    const mime = mediaType === 'audio' ? (isWeb ? 'audio/webm' : 'audio/mp4') : 'image/jpeg';
+
+    if (isWeb) {
+        // En web, convertir URI a Blob real (FormData no acepta {uri,name,type})
+        const response = await fetch(mediaUri);
+        const blob = await response.blob();
+        formData.append('media', blob, `msg_${Date.now()}.${ext}`);
+    } else {
+        formData.append('media', {
+            uri: mediaUri,
+            name: `msg_${Date.now()}.${ext}`,
+            type: mime,
+        });
+    }
+
     formData.append('mediaType', mediaType === 'audio' ? 'audio' : 'photo');
     formData.append('text', '');
     const { data } = await api.post(`/messages/${conversationId}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: isWeb ? {} : { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000,
     });
     return data;
 };

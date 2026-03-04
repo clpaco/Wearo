@@ -104,8 +104,8 @@ const OutfitsScreen = ({ navigation }) => {
             <View
                 style={[styles.outfitCard, { backgroundColor: c.surface, borderColor: c.border }]}
             >
-                {/* Carousel de prendas */}
-                <GarmentCarousel garments={garments} height={180} />
+                {/* Carousel de prendas (cover image como primera slide si existe) */}
+                <GarmentCarousel garments={garments} photos={item.cover_image ? [item.cover_image] : []} height={180} />
 
                 <TouchableOpacity
                     style={styles.outfitInfo}

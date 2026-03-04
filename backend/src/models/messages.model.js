@@ -66,7 +66,8 @@ const getConversationWithUser = async (conversationId, currentUserId) => {
             json_build_object(
                 'id', u.id,
                 'fullName', u.full_name,
-                'avatarUrl', u.avatar_url
+                'avatarUrl', u.avatar_url,
+                'role', u.role
             ) AS other_user,
             (SELECT COUNT(*)::int FROM messages m
              WHERE m.conversation_id = c.id AND m.sender_id != $2 AND m.is_read = false
@@ -86,8 +87,10 @@ const getConversations = async (userId) => {
             CASE WHEN c.participant_1 = $1 THEN c.participant_2 ELSE c.participant_1 END AS other_user_id,
             json_build_object(
                 'id', u.id,
-                'fullName', u.full_name,
-                'avatarUrl', u.avatar_url
+                'fullName', CASE WHEN u.disabled = true THEN 'Cuenta desactivada' ELSE u.full_name END,
+                'avatarUrl', CASE WHEN u.disabled = true THEN NULL ELSE u.avatar_url END,
+                'disabled', u.disabled,
+                'role', u.role
             ) AS other_user,
             (SELECT COUNT(*)::int FROM messages m
              WHERE m.conversation_id = c.id AND m.sender_id != $1 AND m.is_read = false
@@ -104,7 +107,10 @@ const getConversations = async (userId) => {
 // Obtener mensajes de una conversación con paginación
 const getMessages = async (conversationId, { limit = 50, before = null } = {}) => {
     let sql = `SELECT m.*,
-        json_build_object('id', u.id, 'fullName', u.full_name, 'avatarUrl', u.avatar_url) AS sender
+        json_build_object('id', u.id,
+            'fullName', CASE WHEN u.disabled = true THEN 'Cuenta desactivada' ELSE u.full_name END,
+            'avatarUrl', CASE WHEN u.disabled = true THEN NULL ELSE u.avatar_url END
+        ) AS sender
         FROM messages m
         JOIN users u ON m.sender_id = u.id
         WHERE m.conversation_id = $1`;

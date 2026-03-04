@@ -2,12 +2,13 @@
 import React, { useState } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView,
-    TextInput, KeyboardAvoidingView, Platform, Alert,
+    TextInput, KeyboardAvoidingView, Platform, Alert, Image, ActivityIndicator,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../hooks/useTheme';
-import { updateMyProfile } from '../store/profileSlice';
+import { updateMyProfile, uploadAvatar } from '../store/profileSlice';
 
 const GENDERS = [
     { key: 'hombre', label: 'Hombre', icon: 'man-outline' },
@@ -30,11 +31,20 @@ const OnboardingScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { theme } = useTheme();
     const c = theme.colors;
+    const user = useSelector((s) => s.auth.user);
+    const isAdmin = user?.role === 'admin';
 
-    const [step, setStep] = useState(0); // 0=username, 1=gender, 2=styles, 3=done
+    // Regular user state
+    const [step, setStep] = useState(0);
     const [username, setUsername] = useState('');
     const [gender, setGender] = useState(null);
     const [selectedStyles, setSelectedStyles] = useState([]);
+
+    // Admin state
+    const [adminFullName, setAdminFullName] = useState(user?.fullName || user?.full_name || '');
+    const [adminTag, setAdminTag] = useState('');
+    const [avatarUri, setAvatarUri] = useState(null);
+    const [saving, setSaving] = useState(false);
 
     const toggleStyle = (key) => {
         setSelectedStyles((prev) =>
@@ -75,6 +85,172 @@ const OnboardingScreen = ({ navigation }) => {
         }
     };
 
+    // --- Admin handlers ---
+    const pickAvatar = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galeria');
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+        });
+        if (!result.canceled) {
+            setAvatarUri(result.assets[0].uri);
+        }
+    };
+
+    const handleAdminFinish = async () => {
+        if (!adminFullName.trim()) {
+            Alert.alert('', 'Escribe tu nombre');
+            setStep(0);
+            return;
+        }
+        setSaving(true);
+        try {
+            // Upload avatar if selected
+            if (avatarUri) {
+                const filename = avatarUri.split('/').pop();
+                const ext = (filename.split('.').pop() || 'jpg').toLowerCase();
+                const mimeTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+                const formData = new FormData();
+                formData.append('avatar', { uri: avatarUri, name: filename, type: mimeTypes[ext] || 'image/jpeg' });
+                await dispatch(uploadAvatar(formData)).unwrap();
+            }
+            // Update profile
+            await dispatch(updateMyProfile({
+                fullName: adminFullName.trim(),
+                adminTag: adminTag.trim() || undefined,
+                onboardingDone: true,
+            })).unwrap();
+            navigation.reset({ index: 0, routes: [{ name: 'AppTabs' }] });
+        } catch (err) {
+            Alert.alert('Error', typeof err === 'string' ? err : 'No se pudo guardar');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // --- Admin onboarding (2 steps) ---
+    if (isAdmin) {
+        return (
+            <View style={[styles.container, { backgroundColor: c.background }]}>
+                <StatusBar barStyle={c.statusBar} />
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+                        {/* Progress — 2 dots */}
+                        <View style={styles.progressRow}>
+                            {[0, 1].map((i) => (
+                                <View key={i} style={[styles.progressDot, { backgroundColor: i <= step ? c.primary : c.border }]} />
+                            ))}
+                        </View>
+
+                        {/* Admin Step 0: Photo + Name */}
+                        {step === 0 && (
+                            <View style={styles.stepContainer}>
+                                <Text style={[styles.title, { color: c.text }]}>Configura tu perfil de admin</Text>
+                                <Text style={[styles.subtitle, { color: c.textMuted }]}>
+                                    Elige una foto y confirma tu nombre
+                                </Text>
+
+                                {/* Avatar picker */}
+                                <TouchableOpacity style={[styles.avatarPicker, { borderColor: c.border }]} onPress={pickAvatar} activeOpacity={0.7}>
+                                    {avatarUri ? (
+                                        <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                                    ) : (
+                                        <View style={[styles.avatarPlaceholder, { backgroundColor: c.primary + '15' }]}>
+                                            <Ionicons name="camera-outline" size={36} color={c.primary} />
+                                            <Text style={[styles.avatarPlaceholderText, { color: c.primary }]}>Foto</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+
+                                {/* Full name input */}
+                                <Text style={[styles.adminLabel, { color: c.textMuted }]}>Nombre completo</Text>
+                                <View style={[styles.inputWrap, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+                                    <TextInput
+                                        style={[styles.input, { color: c.text }]}
+                                        placeholder="Tu nombre"
+                                        placeholderTextColor={c.textMuted}
+                                        value={adminFullName}
+                                        onChangeText={setAdminFullName}
+                                        autoCapitalize="words"
+                                        maxLength={60}
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.nextBtn, { backgroundColor: adminFullName.trim() ? c.primary : c.border }]}
+                                    onPress={() => adminFullName.trim() && setStep(1)}
+                                    disabled={!adminFullName.trim()}
+                                >
+                                    <Text style={styles.nextBtnText}>Siguiente</Text>
+                                    <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* Admin Step 1: Admin tag */}
+                        {step === 1 && (
+                            <View style={styles.stepContainer}>
+                                <View style={[styles.iconCircle, { backgroundColor: c.primary + '15' }]}>
+                                    <Ionicons name="shield-checkmark-outline" size={40} color={c.primary} />
+                                </View>
+                                <Text style={[styles.title, { color: c.text }]}>Tu apodo de admin</Text>
+                                <Text style={[styles.subtitle, { color: c.textMuted }]}>
+                                    Un nombre corto que te identifique como admin (opcional)
+                                </Text>
+                                <View style={[styles.inputWrap, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
+                                    <TextInput
+                                        style={[styles.input, { color: c.text }]}
+                                        placeholder="Ej: CEO, Soporte, Moda..."
+                                        placeholderTextColor={c.textMuted}
+                                        value={adminTag}
+                                        onChangeText={setAdminTag}
+                                        autoCapitalize="none"
+                                        maxLength={50}
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.nextBtn, { backgroundColor: c.primary, opacity: saving ? 0.6 : 1 }]}
+                                    onPress={handleAdminFinish}
+                                    disabled={saving}
+                                >
+                                    {saving ? (
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                    ) : (
+                                        <>
+                                            <Text style={styles.nextBtnText}>Empezar</Text>
+                                            <Ionicons name="checkmark" size={18} color="#FFF" />
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* Skip */}
+                        <TouchableOpacity style={styles.skipBtn} onPress={handleSkip}>
+                            <Text style={[styles.skipText, { color: c.textMuted }]}>Saltar por ahora</Text>
+                        </TouchableOpacity>
+
+                        {/* Back */}
+                        {step > 0 && (
+                            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
+                                <Ionicons name="arrow-back" size={16} color={c.textMuted} />
+                                <Text style={[styles.backText, { color: c.textMuted }]}>Atras</Text>
+                            </TouchableOpacity>
+                        )}
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </View>
+        );
+    }
+
+    // --- Regular user onboarding (3 steps) ---
     return (
         <View style={[styles.container, { backgroundColor: c.background }]}>
             <StatusBar barStyle={c.statusBar} />
@@ -261,6 +437,18 @@ const styles = StyleSheet.create({
 
     backBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 12 },
     backText: { fontSize: 14 },
+
+    // Admin avatar picker
+    avatarPicker: {
+        width: 120, height: 120, borderRadius: 60, borderWidth: 2, borderStyle: 'dashed',
+        overflow: 'hidden', marginBottom: 24,
+    },
+    avatarImage: { width: '100%', height: '100%' },
+    avatarPlaceholder: {
+        width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center',
+    },
+    avatarPlaceholderText: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+    adminLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6, alignSelf: 'flex-start' },
 });
 
 export default OnboardingScreen;

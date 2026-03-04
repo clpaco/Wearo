@@ -13,11 +13,14 @@ export const getMyShared = async () => {
     return data;
 };
 
-// Compartir outfit al feed (con fotos opcionales)
-export const shareOutfit = async (outfitId, caption, photos = []) => {
+// Compartir outfit o prendas al feed (con fotos opcionales)
+export const shareOutfit = async (outfitId, caption, photos = [], garmentIds = []) => {
     const formData = new FormData();
-    formData.append('outfitId', outfitId);
+    if (outfitId) formData.append('outfitId', outfitId);
     formData.append('caption', caption || '');
+    if (garmentIds.length > 0) {
+        formData.append('garmentIds', JSON.stringify(garmentIds));
+    }
     photos.forEach((uri, i) => {
         const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
         formData.append('photos', {
@@ -58,9 +61,11 @@ export const getComments = async (postId) => {
     return data;
 };
 
-// Añadir comentario
-export const postComment = async (postId, text) => {
-    const { data } = await api.post(`/social/${postId}/comments`, { text });
+// Añadir comentario (con parentId opcional para respuestas)
+export const postComment = async (postId, text, parentId = null) => {
+    const body = { text };
+    if (parentId) body.parentId = parentId;
+    const { data } = await api.post(`/social/${postId}/comments`, body);
     return data;
 };
 

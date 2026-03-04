@@ -3,6 +3,7 @@ import React, { useEffect, useCallback, useState, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, Image, TextInput,
     StyleSheet, StatusBar, RefreshControl, ActivityIndicator, Keyboard,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -166,6 +167,10 @@ const MessagesScreen = ({ navigation }) => {
                 }
             />
 
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
             {/* Barra de búsqueda */}
             <View style={[styles.searchBar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
                 <View style={[styles.searchInput, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}>
@@ -234,6 +239,7 @@ const MessagesScreen = ({ navigation }) => {
                     }
                 />
             )}
+            </KeyboardAvoidingView>
         </View>
     );
 };

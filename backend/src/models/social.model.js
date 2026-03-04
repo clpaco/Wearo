@@ -4,6 +4,10 @@ const { query } = require('../config/db');
 // Auto-migrations
 query('ALTER TABLE shared_outfits ADD COLUMN IF NOT EXISTS photos TEXT[] DEFAULT \'{}\'')
     .catch(() => {});
+query('ALTER TABLE shared_outfits ALTER COLUMN outfit_id DROP NOT NULL')
+    .catch(() => {});
+query('ALTER TABLE shared_outfits ADD COLUMN IF NOT EXISTS garment_ids INTEGER[] DEFAULT \'{}\'')
+    .catch(() => {});
 
 // Crear tabla comments si no existe
 query(`
@@ -11,19 +15,22 @@ query(`
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         shared_outfit_id INTEGER NOT NULL REFERENCES shared_outfits(id) ON DELETE CASCADE,
+        parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
         text TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT NOW()
     )
 `).catch(() => {});
 query('CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(shared_outfit_id)').catch(() => {});
+query('ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE').catch(() => {});
+query('CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id)').catch(() => {});
 
-// Compartir un outfit al feed público (con fotos opcionales)
-const shareOutfit = async (userId, outfitId, caption, photos = []) => {
+// Compartir al feed público (outfit o prendas sueltas, con fotos opcionales)
+const shareOutfit = async (userId, outfitId, caption, photos = [], garmentIds = []) => {
     const result = await query(
-        `INSERT INTO shared_outfits (user_id, outfit_id, caption, photos)
-     VALUES ($1, $2, $3, $4)
+        `INSERT INTO shared_outfits (user_id, outfit_id, caption, photos, garment_ids)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-        [userId, outfitId, caption, photos]
+        [userId, outfitId || null, caption, photos, garmentIds]
     );
     return result.rows[0];
 };
@@ -41,8 +48,8 @@ const unshareOutfit = async (userId, sharedId) => {
 // mode: 'discover' = posts de usuarios públicos, 'following' = posts de seguidos
 const getFeed = async (currentUserId, { limit = 20, offset = 0, mode = 'discover' } = {}) => {
     const whereClause = mode === 'following'
-        ? `WHERE so.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)`
-        : `WHERE (u.is_public = true OR so.user_id = $1)`;
+        ? `WHERE (so.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR u.role = 'admin') AND u.disabled = false AND (so.deleted IS NOT TRUE)`
+        : `WHERE (u.is_public = true OR so.user_id = $1 OR u.role = 'admin') AND u.disabled = false AND (so.deleted IS NOT TRUE)`;
 
     const result = await query(
         `SELECT
@@ -51,26 +58,35 @@ const getFeed = async (currentUserId, { limit = 20, offset = 0, mode = 'discover
       so.created_at,
       so.user_id,
       COALESCE(so.photos, '{}') AS photos,
-      json_build_object('id', u.id, 'fullName', u.full_name, 'avatarUrl', u.avatar_url, 'username', u.username) AS author,
-      json_build_object(
-        'id', o.id, 'name', o.name, 'occasion', o.occasion, 'season', o.season
-      ) AS outfit,
+      json_build_object('id', u.id,
+        'fullName', CASE WHEN u.role = 'admin' THEN 'Wearo' ELSE u.full_name END,
+        'avatarUrl', CASE WHEN u.role = 'admin' THEN NULL ELSE u.avatar_url END,
+        'username', CASE WHEN u.role = 'admin' THEN 'wearo' ELSE u.username END,
+        'isAdmin', u.role = 'admin'
+      ) AS author,
+      CASE WHEN so.outfit_id IS NOT NULL
+        THEN json_build_object('id', o.id, 'name', o.name, 'occasion', o.occasion, 'season', o.season, 'cover_image', o.cover_image)
+        ELSE NULL
+      END AS outfit,
       COALESCE(
-        json_agg(
-          json_build_object('id', g.id, 'name', g.name, 'category', g.category, 'color', g.color, 'image_url', g.image_url)
-          ORDER BY og.position
-        ) FILTER (WHERE g.id IS NOT NULL), '[]'
+        CASE
+          WHEN so.outfit_id IS NOT NULL THEN (
+            SELECT json_agg(json_build_object('id', g.id, 'name', g.name, 'category', g.category, 'color', g.color, 'image_url', g.image_url) ORDER BY og.position)
+            FROM outfit_garments og JOIN garments g ON og.garment_id = g.id WHERE og.outfit_id = so.outfit_id
+          )
+          ELSE (
+            SELECT json_agg(json_build_object('id', g.id, 'name', g.name, 'category', g.category, 'color', g.color, 'image_url', g.image_url))
+            FROM garments g WHERE g.id = ANY(so.garment_ids)
+          )
+        END, '[]'
       ) AS garments,
       (SELECT COUNT(*) FROM likes WHERE shared_outfit_id = so.id)::int AS like_count,
       (SELECT COUNT(*) FROM comments WHERE shared_outfit_id = so.id)::int AS comment_count,
       EXISTS(SELECT 1 FROM likes WHERE shared_outfit_id = so.id AND user_id = $1) AS liked_by_me
     FROM shared_outfits so
     JOIN users u ON so.user_id = u.id
-    JOIN outfits o ON so.outfit_id = o.id
-    LEFT JOIN outfit_garments og ON o.id = og.outfit_id
-    LEFT JOIN garments g ON og.garment_id = g.id
+    LEFT JOIN outfits o ON so.outfit_id = o.id
     ${whereClause}
-    GROUP BY so.id, u.id, o.id
     ORDER BY so.created_at DESC
     LIMIT $2 OFFSET $3`,
         [currentUserId, limit, offset]
@@ -82,11 +98,14 @@ const getFeed = async (currentUserId, { limit = 20, offset = 0, mode = 'discover
 const getMyShared = async (userId) => {
     const result = await query(
         `SELECT so.id, so.caption, so.created_at,
-      json_build_object('id', o.id, 'name', o.name, 'occasion', o.occasion) AS outfit,
+      CASE WHEN so.outfit_id IS NOT NULL
+        THEN json_build_object('id', o.id, 'name', o.name, 'occasion', o.occasion)
+        ELSE NULL
+      END AS outfit,
       (SELECT COUNT(*) FROM likes WHERE shared_outfit_id = so.id)::int AS like_count
     FROM shared_outfits so
-    JOIN outfits o ON so.outfit_id = o.id
-    WHERE so.user_id = $1
+    LEFT JOIN outfits o ON so.outfit_id = o.id
+    WHERE so.user_id = $1 AND (so.deleted IS NOT TRUE)
     ORDER BY so.created_at DESC`,
         [userId]
     );
@@ -149,14 +168,16 @@ const isShared = async (userId, outfitId) => {
 
 // ── Comentarios ──────────────────────────────────────────────────────────────
 
-// Obtener comentarios de un post con datos del autor
-const getComments = async (sharedOutfitId, { limit = 50, offset = 0 } = {}) => {
+// Obtener comentarios de un post con datos del autor (incluye parent_id y reply_count)
+const getComments = async (sharedOutfitId, { limit = 100, offset = 0 } = {}) => {
     const result = await query(
         `SELECT
        c.id,
        c.text,
+       c.parent_id,
        c.created_at,
-       json_build_object('id', u.id, 'fullName', u.full_name, 'avatarUrl', u.avatar_url) AS author
+       json_build_object('id', u.id, 'fullName', u.full_name, 'avatarUrl', u.avatar_url) AS author,
+       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id)::int AS reply_count
      FROM comments c
      JOIN users u ON c.user_id = u.id
      WHERE c.shared_outfit_id = $1
@@ -167,13 +188,13 @@ const getComments = async (sharedOutfitId, { limit = 50, offset = 0 } = {}) => {
     return result.rows;
 };
 
-// Añadir comentario
-const addComment = async (userId, sharedOutfitId, text) => {
+// Añadir comentario (con parent_id opcional para respuestas)
+const addComment = async (userId, sharedOutfitId, text, parentId = null) => {
     const result = await query(
-        `INSERT INTO comments (user_id, shared_outfit_id, text)
-     VALUES ($1, $2, $3)
-     RETURNING id, text, created_at`,
-        [userId, sharedOutfitId, text]
+        `INSERT INTO comments (user_id, shared_outfit_id, text, parent_id)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, text, parent_id, created_at`,
+        [userId, sharedOutfitId, text, parentId]
     );
     const comment = result.rows[0];
     // Obtener datos del autor para devolverlos junto con el comentario
@@ -197,49 +218,99 @@ const deleteComment = async (userId, commentId) => {
     return result.rows[0] || null;
 };
 
+// Admin: soft-delete post con tracking
+const deletePostAdmin = async (postId, adminId) => {
+    const result = await query(
+        'UPDATE shared_outfits SET deleted = true, deleted_by = $2 WHERE id = $1 RETURNING id',
+        [postId, adminId]
+    );
+    return result.rows[0] || null;
+};
+
+// Admin: borrar comentario sin chequear dueño
+const deleteCommentAdmin = async (commentId) => {
+    const result = await query(
+        'DELETE FROM comments WHERE id = $1 RETURNING id',
+        [commentId]
+    );
+    return result.rows[0] || null;
+};
+
 // ── Búsqueda ─────────────────────────────────────────────────────────────────
 
-// Buscar posts por texto (caption, outfit name, garment names, author name)
+// Buscar posts por texto (caption, outfit name, garment names/category/color, author name)
+// Ordenados por relevancia: coincidencias directas primero
 const searchPosts = async (currentUserId, searchTerm, limit = 20) => {
     const pattern = `%${searchTerm}%`;
     const result = await query(
         `SELECT
       so.id, so.caption, so.created_at, so.user_id,
       COALESCE(so.photos, '{}') AS photos,
-      json_build_object('id', u.id, 'fullName', u.full_name, 'avatarUrl', u.avatar_url, 'username', u.username) AS author,
-      json_build_object('id', o.id, 'name', o.name, 'occasion', o.occasion, 'season', o.season) AS outfit,
+      json_build_object('id', u.id,
+        'fullName', CASE WHEN u.role = 'admin' THEN 'Wearo' ELSE u.full_name END,
+        'avatarUrl', CASE WHEN u.role = 'admin' THEN NULL ELSE u.avatar_url END,
+        'username', CASE WHEN u.role = 'admin' THEN 'wearo' ELSE u.username END,
+        'isAdmin', u.role = 'admin'
+      ) AS author,
+      CASE WHEN so.outfit_id IS NOT NULL
+        THEN json_build_object('id', o.id, 'name', o.name, 'occasion', o.occasion, 'season', o.season, 'cover_image', o.cover_image)
+        ELSE NULL
+      END AS outfit,
       COALESCE(
-        json_agg(
-          json_build_object('id', g.id, 'name', g.name, 'category', g.category, 'color', g.color, 'image_url', g.image_url)
-          ORDER BY og.position
-        ) FILTER (WHERE g.id IS NOT NULL), '[]'
+        CASE
+          WHEN so.outfit_id IS NOT NULL THEN (
+            SELECT json_agg(json_build_object('id', g.id, 'name', g.name, 'category', g.category, 'color', g.color, 'image_url', g.image_url) ORDER BY og.position)
+            FROM outfit_garments og JOIN garments g ON og.garment_id = g.id WHERE og.outfit_id = so.outfit_id
+          )
+          ELSE (
+            SELECT json_agg(json_build_object('id', g.id, 'name', g.name, 'category', g.category, 'color', g.color, 'image_url', g.image_url))
+            FROM garments g WHERE g.id = ANY(so.garment_ids)
+          )
+        END, '[]'
       ) AS garments,
       (SELECT COUNT(*) FROM likes WHERE shared_outfit_id = so.id)::int AS like_count,
       (SELECT COUNT(*) FROM comments WHERE shared_outfit_id = so.id)::int AS comment_count,
-      EXISTS(SELECT 1 FROM likes WHERE shared_outfit_id = so.id AND user_id = $1) AS liked_by_me
+      EXISTS(SELECT 1 FROM likes WHERE shared_outfit_id = so.id AND user_id = $1) AS liked_by_me,
+      (
+        CASE WHEN o.name ILIKE $2 THEN 4 ELSE 0 END +
+        CASE WHEN EXISTS(SELECT 1 FROM garments g3
+          WHERE (g3.id = ANY(so.garment_ids) OR g3.id IN (SELECT og3.garment_id FROM outfit_garments og3 WHERE og3.outfit_id = so.outfit_id))
+            AND g3.name ILIKE $2) THEN 3 ELSE 0 END +
+        CASE WHEN EXISTS(SELECT 1 FROM garments g4
+          WHERE (g4.id = ANY(so.garment_ids) OR g4.id IN (SELECT og4.garment_id FROM outfit_garments og4 WHERE og4.outfit_id = so.outfit_id))
+            AND (g4.category ILIKE $2 OR g4.color ILIKE $2)) THEN 2 ELSE 0 END +
+        CASE WHEN so.caption ILIKE $2 THEN 2 ELSE 0 END +
+        CASE WHEN o.occasion ILIKE $2 OR o.season ILIKE $2 THEN 1 ELSE 0 END +
+        CASE WHEN u.full_name ILIKE $2 THEN 1 ELSE 0 END
+      ) AS relevance
     FROM shared_outfits so
     JOIN users u ON so.user_id = u.id
-    JOIN outfits o ON so.outfit_id = o.id
-    LEFT JOIN outfit_garments og ON o.id = og.outfit_id
-    LEFT JOIN garments g ON og.garment_id = g.id
-    WHERE (u.is_public = true OR so.user_id = $1)
-      AND (so.caption ILIKE $2 OR o.name ILIKE $2 OR u.full_name ILIKE $2 OR o.occasion ILIKE $2 OR g.name ILIKE $2 OR g.category ILIKE $2)
-    GROUP BY so.id, u.id, o.id
-    ORDER BY like_count DESC NULLS LAST, so.created_at DESC
+    LEFT JOIN outfits o ON so.outfit_id = o.id
+    WHERE (u.is_public = true OR so.user_id = $1) AND u.disabled = false AND (so.deleted IS NOT TRUE)
+      AND (so.caption ILIKE $2 OR o.name ILIKE $2 OR u.full_name ILIKE $2 OR o.occasion ILIKE $2 OR o.season ILIKE $2
+        OR EXISTS(SELECT 1 FROM garments g2
+          WHERE (g2.id = ANY(so.garment_ids) OR g2.id IN (SELECT og2.garment_id FROM outfit_garments og2 WHERE og2.outfit_id = so.outfit_id))
+            AND (g2.name ILIKE $2 OR g2.category ILIKE $2 OR g2.color ILIKE $2))
+      )
+    ORDER BY relevance DESC, like_count DESC NULLS LAST, so.created_at DESC
     LIMIT $3`,
         [currentUserId, pattern, limit]
     );
     return result.rows;
 };
 
-// Buscar usuarios por nombre
+// Buscar usuarios por nombre o username
 const searchUsers = async (searchTerm, limit = 10) => {
     const pattern = `%${searchTerm}%`;
     const result = await query(
-        `SELECT id, full_name, avatar_url, is_public
+        `SELECT id, full_name, avatar_url, username, is_public
      FROM users
-     WHERE full_name ILIKE $1
-     ORDER BY full_name ASC
+     WHERE (full_name ILIKE $1 OR username ILIKE $1) AND disabled = false AND role != 'admin'
+     ORDER BY
+       CASE WHEN full_name ILIKE $1 AND username ILIKE $1 THEN 0
+            WHEN full_name ILIKE $1 THEN 1
+            ELSE 2 END,
+       full_name ASC
      LIMIT $2`,
         [pattern, limit]
     );
@@ -247,13 +318,55 @@ const searchUsers = async (searchTerm, limit = 10) => {
         id: u.id,
         fullName: u.full_name,
         avatarUrl: u.avatar_url,
+        username: u.username,
         isPublic: u.is_public,
     }));
+};
+
+// Obtener preview de posts por IDs (para mensajes compartidos en DMs)
+const getPostPreviews = async (postIds) => {
+    if (!postIds || postIds.length === 0) return {};
+    const result = await query(
+        `SELECT so.id, so.caption,
+         COALESCE(so.photos, '{}') AS photos,
+         json_build_object('id', u.id,
+           'fullName', CASE WHEN u.role = 'admin' THEN 'Wearo' ELSE u.full_name END,
+           'avatarUrl', CASE WHEN u.role = 'admin' THEN NULL ELSE u.avatar_url END,
+           'isAdmin', u.role = 'admin'
+         ) AS author,
+         CASE WHEN so.outfit_id IS NOT NULL
+           THEN json_build_object('id', o.id, 'name', o.name)
+           ELSE NULL
+         END AS outfit,
+         COALESCE(
+           CASE
+             WHEN so.outfit_id IS NOT NULL THEN (
+               SELECT g.image_url FROM outfit_garments og JOIN garments g ON og.garment_id = g.id
+               WHERE og.outfit_id = so.outfit_id AND g.image_url IS NOT NULL ORDER BY og.position LIMIT 1
+             )
+             ELSE (
+               SELECT g.image_url FROM garments g
+               WHERE g.id = ANY(so.garment_ids) AND g.image_url IS NOT NULL LIMIT 1
+             )
+           END
+         ) AS first_garment_image
+        FROM shared_outfits so
+        JOIN users u ON so.user_id = u.id
+        LEFT JOIN outfits o ON so.outfit_id = o.id
+        WHERE so.id = ANY($1) AND (so.deleted IS NOT TRUE)`,
+        [postIds]
+    );
+    const map = {};
+    for (const row of result.rows) {
+        map[row.id] = row;
+    }
+    return map;
 };
 
 module.exports = {
     shareOutfit, unshareOutfit, getFeed, getMyShared,
     addLike, removeLike, getLikeCount, getLikers, isShared,
     getComments, addComment, deleteComment,
-    searchPosts, searchUsers,
+    deletePostAdmin, deleteCommentAdmin,
+    searchPosts, searchUsers, getPostPreviews,
 };

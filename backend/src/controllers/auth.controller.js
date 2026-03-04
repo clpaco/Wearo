@@ -73,6 +73,7 @@ const register = async (req, res) => {
                 id: user.id,
                 email: user.email,
                 fullName: user.full_name,
+                role: 'user',
             },
             accessToken,
             refreshToken,
@@ -116,6 +117,14 @@ const login = async (req, res) => {
             });
         }
 
+        // Bloquear usuarios desactivados
+        if (user.disabled) {
+            return res.status(403).json({
+                error: true,
+                mensaje: 'Tu cuenta ha sido desactivada. Contacta al administrador.',
+            });
+        }
+
         // Generar tokens
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
@@ -134,6 +143,7 @@ const login = async (req, res) => {
                 email: user.email,
                 fullName: user.full_name,
                 avatarUrl: user.avatar_url,
+                role: user.role || 'user',
             },
             accessToken,
             refreshToken,
@@ -174,6 +184,18 @@ const refreshToken = async (req, res) => {
 
         // Verificar JWT
         const decoded = jwt.verify(token, JWT_REFRESH_SECRET);
+
+        // Verificar que el usuario no esta desactivado
+        const userCheck = await query('SELECT disabled FROM users WHERE id = $1', [decoded.id]);
+        if (userCheck.rows[0]?.disabled) {
+            // Eliminar refresh token
+            await query('DELETE FROM refresh_tokens WHERE token = $1', [token]);
+            return res.status(403).json({
+                error: true,
+                mensaje: 'Tu cuenta ha sido desactivada',
+                code: 'ACCOUNT_DISABLED',
+            });
+        }
 
         // Generar nuevo access token
         const newAccessToken = generateAccessToken({ id: decoded.id, email: decoded.email });

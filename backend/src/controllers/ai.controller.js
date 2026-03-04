@@ -1,9 +1,23 @@
-// Controlador IA — Gemini (outfits/clima) + Perplexity (compras)
+// Controlador IA — Gemini (outfits/clima) + Perplexity (compras) + Whisper (transcripcion)
 const aiService     = require('../services/ai.service');
 const garmentModel  = require('../models/garment.model');
 const outfitModel   = require('../models/outfit.model');
 const weatherService = require('../services/weather.service');
 const { query: dbQuery } = require('../config/db');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Multer para audio temporal (transcripcion)
+const TEMP_DIR = path.join(__dirname, '..', '..', 'uploads', 'temp');
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+const audioUpload = multer({
+    storage: multer.diskStorage({
+        destination: (_, __, cb) => cb(null, TEMP_DIR),
+        filename: (_, file, cb) => cb(null, `voice-${Date.now()}${path.extname(file.originalname) || '.m4a'}`),
+    }),
+    limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max (limite Whisper)
+});
 
 // POST /api/v1/ai/weather-recommend — Sugerencia de outfit según clima
 const weatherRecommend = async (req, res) => {
@@ -82,4 +96,22 @@ const shopping = async (req, res) => {
     }
 };
 
-module.exports = { weatherRecommend, chat, shopping };
+// POST /api/v1/ai/transcribe — Transcribir audio a texto (Whisper via Groq)
+const transcribe = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: true, mensaje: 'Se requiere un archivo de audio' });
+        }
+        const text = await aiService.transcribeAudio(req.file.path);
+        // Borrar archivo temporal
+        fs.unlink(req.file.path, () => {});
+        res.json({ text });
+    } catch (err) {
+        // Borrar archivo temporal en caso de error
+        if (req.file?.path) fs.unlink(req.file.path, () => {});
+        console.error('Error transcripcion:', err.response?.data || err.message);
+        res.status(500).json({ error: true, mensaje: 'Error al transcribir audio' });
+    }
+};
+
+module.exports = { weatherRecommend, chat, shopping, transcribe, audioUpload };

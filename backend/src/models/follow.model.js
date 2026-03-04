@@ -42,15 +42,23 @@ const isFollowing = async (followerId, followingId) => {
     return !!result.rows[0];
 };
 
-// Obtener seguidores de un usuario
+// Obtener seguidores de un usuario (admins se muestran como un solo "Wearo")
 const getFollowers = async (userId, { limit = 30, offset = 0 } = {}) => {
     const result = await query(
-        `SELECT u.id, u.full_name, u.avatar_url, f.created_at AS followed_at
-         FROM follows f
-         JOIN users u ON f.follower_id = u.id
-         WHERE f.following_id = $1
-         ORDER BY f.created_at DESC
-         LIMIT $2 OFFSET $3`,
+        `SELECT * FROM (
+            SELECT u.id, u.full_name, u.avatar_url, f.created_at AS followed_at
+            FROM follows f
+            JOIN users u ON f.follower_id = u.id
+            WHERE f.following_id = $1 AND u.role != 'admin'
+            UNION ALL
+            SELECT MIN(u.id) AS id, 'Wearo' AS full_name, NULL AS avatar_url, MAX(f.created_at) AS followed_at
+            FROM follows f
+            JOIN users u ON f.follower_id = u.id
+            WHERE f.following_id = $1 AND u.role = 'admin'
+            HAVING COUNT(*) > 0
+        ) AS combined
+        ORDER BY followed_at DESC
+        LIMIT $2 OFFSET $3`,
         [userId, limit, offset]
     );
     return result.rows;
@@ -62,7 +70,7 @@ const getFollowing = async (userId, { limit = 30, offset = 0 } = {}) => {
         `SELECT u.id, u.full_name, u.avatar_url, f.created_at AS followed_at
          FROM follows f
          JOIN users u ON f.following_id = u.id
-         WHERE f.follower_id = $1
+         WHERE f.follower_id = $1 AND u.role != 'admin'
          ORDER BY f.created_at DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset]
@@ -70,10 +78,14 @@ const getFollowing = async (userId, { limit = 30, offset = 0 } = {}) => {
     return result.rows;
 };
 
-// Contar seguidores de un usuario
+// Contar seguidores de un usuario (admins cuentan como máximo 1 "Wearo")
 const countFollowers = async (userId) => {
     const result = await query(
-        'SELECT COUNT(*)::int AS count FROM follows WHERE following_id = $1',
+        `SELECT (
+            (SELECT COUNT(*)::int FROM follows f JOIN users u ON f.follower_id = u.id WHERE f.following_id = $1 AND u.role != 'admin')
+            +
+            CASE WHEN EXISTS(SELECT 1 FROM follows f JOIN users u ON f.follower_id = u.id WHERE f.following_id = $1 AND u.role = 'admin') THEN 1 ELSE 0 END
+        ) AS count`,
         [userId]
     );
     return result.rows[0].count;
@@ -170,8 +182,73 @@ const cancelFollowRequest = async (requesterId, targetId) => {
     return result.rows[0] || null;
 };
 
+// Seguir a todos los admins (identidad Wearo compartida)
+const followAllAdmins = async (followerId) => {
+    const admins = await query("SELECT id FROM users WHERE role = 'admin'");
+    for (const admin of admins.rows) {
+        await query(
+            `INSERT INTO follows (follower_id, following_id)
+             VALUES ($1, $2)
+             ON CONFLICT (follower_id, following_id) DO NOTHING`,
+            [followerId, admin.id]
+        );
+    }
+};
+
+// Dejar de seguir a todos los admins
+const unfollowAllAdmins = async (followerId) => {
+    await query(
+        `DELETE FROM follows WHERE follower_id = $1 AND following_id IN (SELECT id FROM users WHERE role = 'admin')`,
+        [followerId]
+    );
+    await query(
+        `DELETE FROM follow_requests WHERE requester_id = $1 AND target_id IN (SELECT id FROM users WHERE role = 'admin')`,
+        [followerId]
+    );
+};
+
+// Seguidores de TODOS los admins (identidad Wearo compartida) — dedup
+const getFollowersOfAllAdmins = async ({ limit = 30, offset = 0 } = {}) => {
+    const result = await query(
+        `SELECT * FROM (
+            SELECT DISTINCT ON (u.id) u.id, u.full_name, u.avatar_url, f.created_at AS followed_at
+            FROM follows f
+            JOIN users u ON f.follower_id = u.id
+            WHERE f.following_id IN (SELECT id FROM users WHERE role = 'admin') AND u.role != 'admin'
+            ORDER BY u.id, f.created_at DESC
+        ) AS non_admins
+        UNION ALL
+        SELECT * FROM (
+            SELECT MIN(u.id) AS id, 'Wearo' AS full_name, NULL AS avatar_url, MAX(f.created_at) AS followed_at
+            FROM follows f
+            JOIN users u ON f.follower_id = u.id
+            WHERE f.following_id IN (SELECT id FROM users WHERE role = 'admin') AND u.role = 'admin'
+            HAVING COUNT(*) > 0
+        ) AS admin_row
+        ORDER BY followed_at DESC
+        LIMIT $1 OFFSET $2`,
+        [limit, offset]
+    );
+    return result.rows;
+};
+
+// Usuarios seguidos por TODOS los admins (identidad Wearo) — dedup, sin otros admins
+const getFollowingOfAllAdmins = async ({ limit = 30, offset = 0 } = {}) => {
+    const result = await query(
+        `SELECT DISTINCT ON (u.id) u.id, u.full_name, u.avatar_url, f.created_at AS followed_at
+         FROM follows f
+         JOIN users u ON f.following_id = u.id
+         WHERE f.follower_id IN (SELECT id FROM users WHERE role = 'admin') AND u.role != 'admin'
+         ORDER BY u.id, f.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+    );
+    return result.rows;
+};
+
 module.exports = {
     follow, unfollow, isFollowing, getFollowers, getFollowing, countFollowers, countFollowing,
+    followAllAdmins, unfollowAllAdmins, getFollowersOfAllAdmins, getFollowingOfAllAdmins,
     createFollowRequest, hasPendingRequest, getIncomingRequests, countPendingRequests,
     acceptFollowRequest, rejectFollowRequest, cancelFollowRequest,
 };

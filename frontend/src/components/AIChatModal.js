@@ -2,16 +2,30 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, FlatList,
-    StyleSheet, Modal, KeyboardAvoidingView, Platform,
+    StyleSheet, Modal, Platform,
     ActivityIndicator, StatusBar, Animated, Linking, Image,
+    Keyboard, Pressable, Alert,
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import {
     sendMessage, fetchShoppingRecs,
     clearChat, clearShoppingRecs, clearAiError,
 } from '../store/aiSlice';
 import { useTheme } from '../hooks/useTheme';
+import { transcribeAudio } from '../services/ai.service';
+
+// Opciones de grabacion: AAC en M4A
+const RECORDING_OPTIONS = {
+    isMeteringEnabled: true,
+    android: { extension: '.m4a', outputFormat: 2, audioEncoder: 3, sampleRate: 44100, numberOfChannels: 1, bitRate: 128000 },
+    ios: { extension: '.m4a', outputFormat: 'aac ', audioQuality: 96, sampleRate: 44100, numberOfChannels: 1, bitRate: 128000 },
+    web: { mimeType: 'audio/webm', bitsPerSecond: 128000 },
+};
+
+const formatDuration = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
 // Icono Ionicons por categoría de prenda para el modo shopping
 const categoryIcon = (cat) => {
@@ -68,12 +82,31 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
     const dispatch = useDispatch();
     const { theme } = useTheme();
     const c = theme.colors;
+    const insets = useSafeAreaInsets();
+    const bottomPadding = Math.max(insets.bottom, 12);
 
     const { chatMessages, shoppingRecs, isLoading, isShoppingLoading, error } = useSelector((s) => s.ai);
     const [input, setInput] = useState('');
     const [shopQuery, setShopQuery] = useState('');
     const flatListRef = useRef(null);
     const isOutfits = mode === 'outfits';
+
+    // Audio recording state
+    const [isRecording, setIsRecording] = useState(false);
+    const [recording, setRecording] = useState(null);
+    const [recordDuration, setRecordDuration] = useState(0);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const recordInterval = useRef(null);
+
+    // Manual keyboard height tracking (KeyboardAvoidingView doesn't work in pageSheet modals on iOS)
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const showSub = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
+        const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+        return () => { showSub.remove(); hideSub.remove(); };
+    }, []);
 
     // Cargar recomendaciones de compra al abrir en modo shopping
     useEffect(() => {
@@ -111,6 +144,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
         setInput('');
         setShopQuery('');
         dispatch(clearAiError());
+        if (isRecording) cancelRecording();
         onClose();
     };
 
@@ -118,6 +152,73 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
         dispatch(clearChat());
         dispatch(clearShoppingRecs());
         setShopQuery('');
+    };
+
+    // ── Audio recording ──────────────────────────────────────────────────────
+    const startRecording = async () => {
+        try {
+            const perm = await Audio.requestPermissionsAsync();
+            if (perm.status !== 'granted') {
+                Alert.alert('Permiso necesario', 'Necesitamos acceso al microfono.');
+                return;
+            }
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+            let rec;
+            try {
+                const result = await Audio.Recording.createAsync(RECORDING_OPTIONS);
+                rec = result.recording;
+            } catch (_) {
+                const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+                rec = result.recording;
+            }
+            setRecording(rec);
+            setIsRecording(true);
+            setRecordDuration(0);
+            recordInterval.current = setInterval(() => setRecordDuration((d) => d + 1), 1000);
+        } catch (err) {
+            console.error('Error starting recording:', err);
+            Alert.alert('Error', 'No se pudo iniciar la grabacion');
+        }
+    };
+
+    const cancelRecording = async () => {
+        if (recordInterval.current) clearInterval(recordInterval.current);
+        setIsRecording(false);
+        setRecordDuration(0);
+        if (recording) {
+            try { await recording.stopAndUnloadAsync(); } catch (_) {}
+            setRecording(null);
+        }
+    };
+
+    const sendRecording = async () => {
+        if (recordInterval.current) clearInterval(recordInterval.current);
+        setIsRecording(false);
+        setRecordDuration(0);
+        if (!recording) return;
+        try {
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            setRecording(null);
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+            if (!uri) return;
+            setIsTranscribing(true);
+            const text = await transcribeAudio(uri);
+            setIsTranscribing(false);
+            if (text) {
+                if (isOutfits) {
+                    setInput((prev) => prev ? prev + ' ' + text : text);
+                } else {
+                    setShopQuery((prev) => prev ? prev + ' ' + text : text);
+                }
+            } else {
+                Alert.alert('Sin resultado', 'No se pudo transcribir el audio. Intenta de nuevo.');
+            }
+        } catch (err) {
+            setIsTranscribing(false);
+            console.error('Error transcribing:', err);
+            Alert.alert('Error', 'No se pudo transcribir el audio');
+        }
     };
 
     // ── Render mensaje (modo outfits) ────────────────────────────────────────
@@ -212,11 +313,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
-            <KeyboardAvoidingView
-                style={[styles.root, { backgroundColor: c.background }]}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
-            >
+            <View style={[styles.root, { backgroundColor: c.background, paddingBottom: keyboardHeight > 0 ? keyboardHeight : 0 }]}>
                 <StatusBar barStyle={c.statusBar} />
 
                 {/* Header */}
@@ -247,7 +344,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                     <>
                         {/* Mensaje de bienvenida si no hay chat */}
                         {chatMessages.length === 0 && !isLoading && (
-                            <View style={styles.welcomeWrap}>
+                            <Pressable style={styles.welcomeWrap} onPress={Keyboard.dismiss}>
                                 <Ionicons name="sparkles" size={44} color={c.primary} style={{ textAlign: 'center', marginBottom: 12 }} />
                                 <Text style={[styles.welcomeTitle, { color: c.text }]}>StyleAI listo</Text>
                                 <Text style={[styles.welcomeText, { color: c.textSecondary }]}>
@@ -262,7 +359,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                         <Text style={[styles.suggestionText, { color: c.primary }]}>{s}</Text>
                                     </TouchableOpacity>
                                 ))}
-                            </View>
+                            </Pressable>
                         )}
 
                         {/* Lista de mensajes */}
@@ -274,6 +371,8 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 keyExtractor={(_, i) => i.toString()}
                                 contentContainerStyle={styles.msgList}
                                 showsVerticalScrollIndicator={false}
+                                keyboardDismissMode="on-drag"
+                                keyboardShouldPersistTaps="handled"
                             />
                         )}
 
@@ -290,8 +389,25 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                             </View>
                         )}
 
+                        {/* Recording bar */}
+                        {isRecording && (
+                            <View style={[styles.recordingBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: keyboardHeight > 0 ? 10 : bottomPadding }]}>
+                                <TouchableOpacity onPress={cancelRecording} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                    <Ionicons name="trash-outline" size={24} color={c.error || '#E17055'} />
+                                </TouchableOpacity>
+                                <View style={styles.recordingInfo}>
+                                    <View style={[styles.recordingDot, { backgroundColor: c.error || '#E17055' }]} />
+                                    <Text style={[styles.recordingTime, { color: c.text }]}>{formatDuration(recordDuration)}</Text>
+                                </View>
+                                <TouchableOpacity style={[styles.sendBtn, { backgroundColor: c.primary }]} onPress={sendRecording}>
+                                    <Ionicons name="send" size={18} color="#FFF" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
                         {/* Input */}
-                        <View style={[styles.inputBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
+                        {!isRecording && (
+                        <View style={[styles.inputBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: keyboardHeight > 0 ? 10 : bottomPadding }]}>
                             <TextInput
                                 style={[styles.textInput, { color: c.text, backgroundColor: c.surfaceVariant, borderColor: c.border }]}
                                 placeholder="Pregunta sobre tu armario…"
@@ -302,27 +418,43 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 maxLength={500}
                                 onSubmitEditing={handleSend}
                                 returnKeyType="send"
+                                blurOnSubmit={false}
                             />
-                            <TouchableOpacity
-                                style={[styles.sendBtn, { backgroundColor: input.trim() && !isLoading ? c.primary : c.border }]}
-                                onPress={handleSend}
-                                disabled={!input.trim() || isLoading}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="send" size={18} color="#FFF" />
-                            </TouchableOpacity>
+                            {isTranscribing ? (
+                                <View style={[styles.sendBtn, { backgroundColor: c.primary }]}>
+                                    <ActivityIndicator size="small" color="#FFF" />
+                                </View>
+                            ) : input.trim() ? (
+                                <TouchableOpacity
+                                    style={[styles.sendBtn, { backgroundColor: !isLoading ? c.primary : c.border }]}
+                                    onPress={handleSend}
+                                    disabled={isLoading}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="send" size={18} color="#FFF" />
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.sendBtn, { backgroundColor: c.primary }]}
+                                    onPress={startRecording}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="mic" size={20} color="#FFF" />
+                                </TouchableOpacity>
+                            )}
                         </View>
+                        )}
                     </>
                 ) : (
                     /* Modo shopping — grid cuadrado + chat input */
                     <>
                         {isShoppingLoading ? (
-                            <View style={styles.centeredLoad}>
+                            <Pressable style={styles.centeredLoad} onPress={Keyboard.dismiss}>
                                 <ActivityIndicator size="large" color={c.primary} />
                                 <Text style={[styles.loadingText, { color: c.textSecondary }]}>
                                     Analizando tu armario…
                                 </Text>
-                            </View>
+                            </Pressable>
                         ) : shoppingRecs.length > 0 ? (
                             <FlatList
                                 data={shoppingRecs}
@@ -332,6 +464,8 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 columnWrapperStyle={styles.gridRow}
                                 contentContainerStyle={styles.shopGrid}
                                 showsVerticalScrollIndicator={false}
+                                keyboardDismissMode="on-drag"
+                                keyboardShouldPersistTaps="handled"
                                 ListHeaderComponent={
                                     <Text style={[styles.shopHeader, { color: c.textSecondary }]}>
                                         Sugerencias personalizadas para tu armario:
@@ -349,7 +483,7 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 }
                             />
                         ) : (
-                            <View style={styles.centeredLoad}>
+                            <Pressable style={styles.centeredLoad} onPress={Keyboard.dismiss}>
                                 <Ionicons name="bag-outline" size={44} color={c.textSecondary} style={{ marginBottom: 12 }} />
                                 <Text style={[{ color: c.textSecondary, textAlign: 'center' }]}>
                                     No se pudieron obtener sugerencias.{'\n'}Verifica que las API keys de IA están configuradas.
@@ -360,11 +494,28 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 >
                                     <Text style={{ color: '#FFF', fontWeight: '700' }}>Reintentar</Text>
                                 </TouchableOpacity>
+                            </Pressable>
+                        )}
+
+                        {/* Recording bar (shopping) */}
+                        {isRecording && (
+                            <View style={[styles.recordingBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: keyboardHeight > 0 ? 10 : bottomPadding }]}>
+                                <TouchableOpacity onPress={cancelRecording} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                    <Ionicons name="trash-outline" size={24} color={c.error || '#E17055'} />
+                                </TouchableOpacity>
+                                <View style={styles.recordingInfo}>
+                                    <View style={[styles.recordingDot, { backgroundColor: c.error || '#E17055' }]} />
+                                    <Text style={[styles.recordingTime, { color: c.text }]}>{formatDuration(recordDuration)}</Text>
+                                </View>
+                                <TouchableOpacity style={[styles.sendBtn, { backgroundColor: c.primary }]} onPress={sendRecording}>
+                                    <Ionicons name="send" size={18} color="#FFF" />
+                                </TouchableOpacity>
                             </View>
                         )}
 
                         {/* Input de búsqueda para shopping */}
-                        <View style={[styles.inputBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
+                        {!isRecording && (
+                        <View style={[styles.inputBar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: keyboardHeight > 0 ? 10 : bottomPadding }]}>
                             <TextInput
                                 style={[styles.textInput, { color: c.text, backgroundColor: c.surfaceVariant, borderColor: c.border }]}
                                 placeholder="Busca algo concreto… ej: vestido para boda"
@@ -375,18 +526,33 @@ const AIChatModal = ({ visible, mode = 'outfits', onClose, city }) => {
                                 onSubmitEditing={handleShopSearch}
                                 returnKeyType="search"
                             />
-                            <TouchableOpacity
-                                style={[styles.sendBtn, { backgroundColor: shopQuery.trim() && !isShoppingLoading ? c.primary : c.border }]}
-                                onPress={handleShopSearch}
-                                disabled={!shopQuery.trim() || isShoppingLoading}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="search" size={18} color="#FFF" />
-                            </TouchableOpacity>
+                            {isTranscribing ? (
+                                <View style={[styles.sendBtn, { backgroundColor: c.primary }]}>
+                                    <ActivityIndicator size="small" color="#FFF" />
+                                </View>
+                            ) : shopQuery.trim() ? (
+                                <TouchableOpacity
+                                    style={[styles.sendBtn, { backgroundColor: !isShoppingLoading ? c.primary : c.border }]}
+                                    onPress={handleShopSearch}
+                                    disabled={isShoppingLoading}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="search" size={18} color="#FFF" />
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.sendBtn, { backgroundColor: c.primary }]}
+                                    onPress={startRecording}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="mic" size={20} color="#FFF" />
+                                </TouchableOpacity>
+                            )}
                         </View>
+                        )}
                     </>
                 )}
-            </KeyboardAvoidingView>
+            </View>
         </Modal>
     );
 };
@@ -432,6 +598,15 @@ const styles = StyleSheet.create({
         fontSize: 14, maxHeight: 100,
     },
     sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+
+    recordingBar: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 12, paddingVertical: 10,
+        borderTopWidth: 1, gap: 12,
+    },
+    recordingInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    recordingDot: { width: 10, height: 10, borderRadius: 5 },
+    recordingTime: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
 
     shopGrid: { padding: 12, paddingBottom: 4 },
     gridRow: { justifyContent: 'space-between', marginBottom: 12 },

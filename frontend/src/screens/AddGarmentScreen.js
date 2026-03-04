@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, Image,
     StyleSheet, ScrollView, Alert, ActivityIndicator, StatusBar,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -173,6 +174,10 @@ const AddGarmentScreen = ({ navigation, route }) => {
                 onBack={() => navigation.goBack()}
             />
 
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Imagen */}
                 <View style={styles.imageSection}>
@@ -441,6 +446,7 @@ const AddGarmentScreen = ({ navigation, route }) => {
                     )}
                 </TouchableOpacity>
             </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 };

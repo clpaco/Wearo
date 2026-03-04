@@ -295,7 +295,7 @@ const recommendPurchases = async ({ garments = [], query = '', gender = '' }) =>
             : '';
 
     const userContext = query
-        ? `El usuario busca: "${query}". Teniendo en cuenta su armario (${wardrobeSummary || 'vacio'}), recomienda 10 articulos de moda concretos relacionados con lo que pide (nombre de producto real con marca si es posible). Si busca accesorios (reloj, gafas, pulsera, collar, anillo, cinturon, gorra, bufanda, bolso, mochila, cartera, etc.) recomienda SOLO accesorios de ese tipo, variando marcas y estilos. Incluye un precio estimado en euros.`
+        ? `El usuario busca EXACTAMENTE: "${query}". Los 10 resultados deben ser TODOS variaciones de "${query}" — distintas marcas, estilos, colores o rangos de precio, pero TODOS del mismo tipo de prenda/accesorio que pide. NO incluyas prendas de otras categorias. Usa nombres de producto reales con marca. Incluye un precio estimado en euros. Su armario actual: ${wardrobeSummary || 'vacio'}.`
         : wardrobeSummary
             ? `El usuario tiene: ${wardrobeSummary}. Recomienda 10 articulos de moda concretos para comprar que complementen su armario (prendas, calzado y accesorios — nombre de producto real con marca si es posible). Incluye un precio estimado en euros.`
             : `El usuario no tiene ropa. Recomienda 10 articulos basicos esenciales (prendas, calzado y accesorios — nombres concretos con marca). Incluye un precio estimado en euros.`;
@@ -361,4 +361,21 @@ const recommendPurchases = async ({ garments = [], query = '', gender = '' }) =>
     return [{ name: 'Error', description: details || 'No se pudieron obtener recomendaciones.', reason: 'Verifica las API keys', category: 'error', searchUrl: '' }];
 };
 
-module.exports = { recommendByWeather, chatAboutWardrobe, recommendPurchases };
+// ── Transcribir audio a texto (Groq Whisper) ─────────────────────────────────
+
+const transcribeAudio = async (filePath) => {
+    if (!GROQ_KEY) throw new Error('GROQ_API_KEY no configurada para transcripcion');
+    const FormData = require('form-data');
+    const fs = require('fs');
+    const form = new FormData();
+    form.append('file', fs.createReadStream(filePath));
+    form.append('model', 'whisper-large-v3');
+    form.append('language', 'es');
+    const resp = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', form, {
+        headers: { ...form.getHeaders(), Authorization: `Bearer ${GROQ_KEY}` },
+        timeout: 30000,
+    });
+    return resp.data.text || '';
+};
+
+module.exports = { recommendByWeather, chatAboutWardrobe, recommendPurchases, transcribeAudio };

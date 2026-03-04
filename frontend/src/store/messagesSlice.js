@@ -130,6 +130,12 @@ const messagesSlice = createSlice({
         clearSearchResults: (state) => {
             state.searchResults = [];
         },
+        // Reducer sincrono para actualizar mensajes desde polling directo
+        setChatMessages: (state, action) => {
+            const { conversationId, messages, hasMore } = action.payload;
+            state.chatMessages[conversationId] = messages;
+            state.chatHasMore[conversationId] = hasMore;
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -168,11 +174,16 @@ const messagesSlice = createSlice({
                 state.isChatLoading = false;
                 const { conversationId, messages, hasMore } = action.payload;
                 const existing = state.chatMessages[conversationId] || [];
-                // Si hay before, prepend; si no, reemplazar
+                // Si hay before, prepend (cargar mensajes antiguos)
                 if (existing.length > 0 && messages.length > 0 && messages[messages.length - 1].id < existing[0].id) {
                     state.chatMessages[conversationId] = [...messages, ...existing];
                 } else {
-                    state.chatMessages[conversationId] = messages;
+                    // Polling: solo actualizar si los datos cambiaron para evitar saltos de scroll
+                    const lastExistingId = existing.length > 0 ? existing[existing.length - 1].id : null;
+                    const lastNewId = messages.length > 0 ? messages[messages.length - 1].id : null;
+                    if (existing.length !== messages.length || lastExistingId !== lastNewId) {
+                        state.chatMessages[conversationId] = messages;
+                    }
                 }
                 state.chatHasMore[conversationId] = hasMore;
             })
@@ -221,5 +232,5 @@ const messagesSlice = createSlice({
     },
 });
 
-export const { clearMessages, clearSearchResults } = messagesSlice.actions;
+export const { clearMessages, clearSearchResults, setChatMessages } = messagesSlice.actions;
 export default messagesSlice.reducer;

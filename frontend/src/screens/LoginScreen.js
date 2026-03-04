@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity,
     StyleSheet, KeyboardAvoidingView, Platform,
-    ActivityIndicator, Alert, StatusBar, Animated,
+    ActivityIndicator, Alert, StatusBar, Animated, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,10 +45,13 @@ const LoginScreen = ({ navigation }) => {
             <Animated.View style={{ opacity: fadeAnim }}>
             {/* Header */}
             <View style={styles.header}>
-                <View style={[styles.logoCircle, { backgroundColor: c.primary + '20' }]}>
-                    <Ionicons name="shirt-outline" size={40} color={c.primary} />
+                <View style={styles.logoCrop}>
+                    <Image
+                        source={require('../../assets/logo.png')}
+                        style={styles.logoImage}
+                        resizeMode="cover"
+                    />
                 </View>
-                <Text style={[styles.title, { color: c.text }]}>OutfitVault</Text>
                 <Text style={[styles.subtitle, { color: c.textSecondary }]}>
                     Tu armario inteligente
                 </Text>
@@ -148,18 +151,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 32,
     },
-    logoCircle: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+    logoCrop: {
+        ...Platform.select({
+            web: { width: 500, height: 90 },
+            default: { width: 300, height: 55 },
+        }),
+        overflow: 'hidden',
         marginBottom: 12,
     },
-    title: {
-        fontSize: 32,
-        fontWeight: '800',
-        letterSpacing: -0.5,
+    logoImage: {
+        ...Platform.select({
+            web: { width: 500, height: 160, marginTop: -25 },
+            default: { width: 300, height: 100, marginTop: -15 },
+        }),
     },
     subtitle: {
         fontSize: 16,

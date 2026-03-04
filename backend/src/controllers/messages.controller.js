@@ -1,5 +1,6 @@
 // Controlador de Mensajes Directos
 const messagesModel = require('../models/messages.model');
+const socialModel = require('../models/social.model');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -17,7 +18,12 @@ const msgUpload = multer({
         },
     }),
     fileFilter: (_req, file, cb) => {
-        const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'audio/mp4', 'audio/mpeg', 'audio/m4a', 'audio/aac'].includes(file.mimetype);
+        const ok = [
+            'image/jpeg', 'image/png', 'image/webp', 'image/heic',
+            'audio/mp4', 'audio/mpeg', 'audio/m4a', 'audio/aac',
+            'audio/x-m4a', 'audio/mp4a-latm', 'audio/x-caf', 'audio/wav',
+            'audio/webm', 'audio/ogg', 'audio/3gpp',
+        ].includes(file.mimetype);
         cb(ok ? null : new Error('Tipo no permitido'), ok);
     },
     limits: { fileSize: 15 * 1024 * 1024 },
@@ -95,6 +101,21 @@ const getMessages = async (req, res) => {
         await messagesModel.markAsRead(conversationId, req.user.id);
 
         const messages = await messagesModel.getMessages(conversationId, { limit, before });
+
+        // Enrich post-type messages with shared post preview data
+        const postIds = messages
+            .filter(m => m.media_type === 'post' && m.media_url)
+            .map(m => parseInt(m.media_url))
+            .filter(id => !isNaN(id));
+        if (postIds.length > 0) {
+            const previews = await socialModel.getPostPreviews(postIds);
+            for (const msg of messages) {
+                if (msg.media_type === 'post' && msg.media_url) {
+                    msg.shared_post = previews[parseInt(msg.media_url)] || null;
+                }
+            }
+        }
+
         res.json({ messages, hasMore: messages.length === limit });
     } catch (err) {
         console.error('Error obteniendo mensajes:', err);
@@ -119,9 +140,12 @@ const sendMessage = async (req, res) => {
         // Handle file upload (photo or audio)
         if (req.file) {
             mediaUrl = `/uploads/messages/${req.file.filename}`;
+            console.log('Media upload:', req.file.originalname, req.file.mimetype, req.file.size, 'bytes');
             if (!mediaType) {
                 mediaType = req.file.mimetype.startsWith('audio/') ? 'audio' : 'photo';
             }
+        } else if (bodyMediaType === 'audio' || bodyMediaType === 'photo') {
+            console.log('WARN: mediaType es', bodyMediaType, 'pero req.file es null. Body:', JSON.stringify(req.body));
         }
 
         // Handle shared post

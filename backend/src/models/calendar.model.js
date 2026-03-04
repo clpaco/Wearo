@@ -27,6 +27,7 @@ const findByRange = async (userId, startDate, endDate) => {
     const result = await query(
         `SELECT ce.*,
             o.name AS outfit_name,
+            o.cover_image AS outfit_cover_image,
             CASE
                 WHEN ce.outfit_id IS NOT NULL THEN
                     COALESCE(
@@ -64,6 +65,7 @@ const findByDate = async (userId, date) => {
     const result = await query(
         `SELECT ce.*,
             o.name AS outfit_name,
+            o.cover_image AS outfit_cover_image,
             CASE
                 WHEN ce.outfit_id IS NOT NULL THEN
                     COALESCE(

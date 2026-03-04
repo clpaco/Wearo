@@ -1,5 +1,27 @@
 // Controlador de Outfits — CRUD completo
 const outfitModel = require('../models/outfit.model');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Directorio de uploads para cover images de outfits
+const OUTFITS_DIR = path.resolve(__dirname, '..', '..', 'uploads', 'outfits');
+if (!fs.existsSync(OUTFITS_DIR)) fs.mkdirSync(OUTFITS_DIR, { recursive: true });
+
+const outfitUpload = multer({
+    storage: multer.diskStorage({
+        destination: (_req, _file, cb) => cb(null, OUTFITS_DIR),
+        filename: (_req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+            cb(null, `outfit-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+        },
+    }),
+    fileFilter: (_req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+        cb(null, allowed.includes(file.mimetype));
+    },
+    limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 // GET /api/v1/outfits — Listar outfits del usuario
 const getAll = async (req, res) => {
@@ -40,7 +62,12 @@ const getById = async (req, res) => {
 // POST /api/v1/outfits — Crear nuevo outfit
 const create = async (req, res) => {
     try {
-        const { name, occasion, season, notes, garmentIds } = req.body;
+        const { name, occasion, season, notes } = req.body;
+        // garmentIds puede llegar como string (FormData) o array (JSON)
+        let garmentIds = req.body.garmentIds;
+        if (typeof garmentIds === 'string') {
+            try { garmentIds = JSON.parse(garmentIds); } catch (_) { garmentIds = []; }
+        }
 
         if (!name) {
             return res.status(400).json({ error: true, mensaje: 'El nombre es obligatorio' });
@@ -52,8 +79,10 @@ const create = async (req, res) => {
             });
         }
 
+        const coverImage = req.file ? `/uploads/outfits/${req.file.filename}` : null;
+
         const outfit = await outfitModel.create(req.user.id, {
-            name, occasion, season, notes, garmentIds,
+            name, occasion, season, notes, garmentIds, coverImage,
         });
 
         res.status(201).json({
@@ -69,10 +98,25 @@ const create = async (req, res) => {
 // PUT /api/v1/outfits/:id — Actualizar outfit
 const update = async (req, res) => {
     try {
-        const { name, occasion, season, notes, isFavorite, garmentIds } = req.body;
+        const { name, occasion, season, notes, isFavorite } = req.body;
+        let garmentIds = req.body.garmentIds;
+        if (typeof garmentIds === 'string') {
+            try { garmentIds = JSON.parse(garmentIds); } catch (_) { garmentIds = undefined; }
+        }
+
+        let coverImage;
+        if (req.file) {
+            coverImage = `/uploads/outfits/${req.file.filename}`;
+            // Borrar imagen anterior si existe
+            const existing = await outfitModel.findById(req.user.id, req.params.id);
+            if (existing?.cover_image) {
+                const oldPath = path.resolve(__dirname, '..', '..', existing.cover_image.replace(/^\//, ''));
+                fs.unlink(oldPath, () => {});
+            }
+        }
 
         const outfit = await outfitModel.update(req.user.id, req.params.id, {
-            name, occasion, season, notes, isFavorite, garmentIds,
+            name, occasion, season, notes, isFavorite, garmentIds, coverImage,
         });
 
         if (!outfit) {
@@ -89,6 +133,13 @@ const update = async (req, res) => {
 // DELETE /api/v1/outfits/:id — Eliminar outfit
 const remove = async (req, res) => {
     try {
+        // Borrar cover image del disco si existe
+        const existing = await outfitModel.findById(req.user.id, req.params.id);
+        if (existing?.cover_image) {
+            const imgPath = path.resolve(__dirname, '..', '..', existing.cover_image.replace(/^\//, ''));
+            fs.unlink(imgPath, () => {});
+        }
+
         const outfit = await outfitModel.remove(req.user.id, req.params.id);
         if (!outfit) {
             return res.status(404).json({ error: true, mensaje: 'Outfit no encontrado' });
@@ -100,4 +151,4 @@ const remove = async (req, res) => {
     }
 };
 
-module.exports = { getAll, getById, create, update, remove };
+module.exports = { getAll, getById, create, update, remove, outfitUpload };

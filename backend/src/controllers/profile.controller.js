@@ -28,6 +28,11 @@ const avatarUpload = multer({
 // GET /api/v1/users/me — Mi perfil
 const getMe = async (req, res) => {
     try {
+        // Verificar si la cuenta esta desactivada
+        const userCheck = await dbQuery('SELECT disabled FROM users WHERE id = $1', [req.user.id]);
+        if (userCheck.rows[0]?.disabled) {
+            return res.status(403).json({ error: true, mensaje: 'Tu cuenta ha sido desactivada', code: 'ACCOUNT_DISABLED' });
+        }
         const profile = await profileModel.getUserProfile(req.user.id, req.user.id);
         if (!profile) return res.status(404).json({ error: true, mensaje: 'Perfil no encontrado' });
         const pendingCount = await followModel.countPendingRequests(req.user.id);
@@ -43,6 +48,13 @@ const getProfile = async (req, res) => {
     try {
         const profile = await profileModel.getUserProfile(req.params.id, req.user.id);
         if (!profile) return res.status(404).json({ error: true, mensaje: 'Usuario no encontrado' });
+        // Non-admin users cannot see disabled profiles
+        if (profile.disabled) {
+            const currentUser = await dbQuery('SELECT role FROM users WHERE id = $1', [req.user.id]);
+            if (!currentUser.rows[0] || currentUser.rows[0].role !== 'admin') {
+                return res.status(404).json({ error: true, mensaje: 'Usuario no encontrado' });
+            }
+        }
         const [following, pendingRequest] = await Promise.all([
             followModel.isFollowing(req.user.id, req.params.id),
             followModel.hasPendingRequest(req.user.id, req.params.id),
@@ -57,9 +69,9 @@ const getProfile = async (req, res) => {
 // PUT /api/v1/users/me — Actualizar perfil
 const updateMe = async (req, res) => {
     try {
-        const { fullName, bio, isPublic, username, gender, stylePreferences, onboardingDone } = req.body;
+        const { fullName, bio, isPublic, username, gender, stylePreferences, onboardingDone, adminTag } = req.body;
         const updated = await profileModel.updateProfile(req.user.id, {
-            fullName, bio, isPublic, username, gender, stylePreferences, onboardingDone,
+            fullName, bio, isPublic, username, gender, stylePreferences, onboardingDone, adminTag,
         });
         res.json({ mensaje: 'Perfil actualizado', profile: updated });
     } catch (err) {
@@ -90,11 +102,22 @@ const uploadAvatar = (req, res) => {
 // GET /api/v1/users/:id/posts — Posts compartidos de un usuario
 const getUserPosts = async (req, res) => {
     try {
-        // Si perfil privado y no lo sigues, no mostrar posts
         const targetId = req.params.id;
         if (String(targetId) !== String(req.user.id)) {
-            const targetUser = await dbQuery('SELECT is_public FROM users WHERE id = $1', [targetId]);
-            const isPublic = targetUser.rows[0]?.is_public !== false;
+            const targetUser = await dbQuery('SELECT is_public, disabled, role FROM users WHERE id = $1', [targetId]);
+            const row = targetUser.rows[0];
+            if (!row) return res.json({ posts: [], hasMore: false });
+
+            // Si usuario desactivado, solo admin puede ver posts
+            if (row.disabled) {
+                const currentUser = await dbQuery('SELECT role FROM users WHERE id = $1', [req.user.id]);
+                if (!currentUser.rows[0] || currentUser.rows[0].role !== 'admin') {
+                    return res.json({ posts: [], hasMore: false });
+                }
+            }
+
+            // Si perfil privado y no lo sigues, no mostrar posts
+            const isPublic = row.is_public !== false;
             if (!isPublic) {
                 const follows = await followModel.isFollowing(req.user.id, targetId);
                 if (!follows) {
@@ -104,6 +127,14 @@ const getUserPosts = async (req, res) => {
         }
         const limit  = parseInt(req.query.limit, 10) || 20;
         const offset = parseInt(req.query.offset, 10) || 0;
+
+        // Si el target es admin, mostrar todos los posts de admin (perfil Wearo compartido)
+        const targetRole = await dbQuery('SELECT role FROM users WHERE id = $1', [targetId]);
+        if (targetRole.rows[0]?.role === 'admin') {
+            const posts = await profileModel.getAllAdminPosts(req.user.id, { limit, offset });
+            return res.json({ posts, hasMore: posts.length === limit });
+        }
+
         const posts  = await profileModel.getUserPosts(targetId, req.user.id, { limit, offset });
         res.json({ posts, hasMore: posts.length === limit });
     } catch (err) {
@@ -118,18 +149,23 @@ const followUser = async (req, res) => {
         if (String(req.params.id) === String(req.user.id)) {
             return res.status(400).json({ error: true, mensaje: 'No puedes seguirte a ti mismo' });
         }
-        // Comprobar si el usuario objetivo es privado
-        const targetUser = await dbQuery('SELECT is_public FROM users WHERE id = $1', [req.params.id]);
+        // Comprobar rol y visibilidad del usuario objetivo
+        const targetUser = await dbQuery('SELECT is_public, role FROM users WHERE id = $1', [req.params.id]);
         const isPublic = targetUser.rows[0]?.is_public !== false;
+        const isTargetAdmin = targetUser.rows[0]?.role === 'admin';
 
-        if (!isPublic) {
-            // Perfil privado: crear solicitud
+        if (!isPublic && !isTargetAdmin) {
+            // Perfil privado (no admin): crear solicitud
             await followModel.createFollowRequest(req.user.id, req.params.id);
             return res.json({ mensaje: 'Solicitud enviada', is_following: false, has_pending_request: true });
         }
 
-        // Perfil publico: seguir directamente
-        await followModel.follow(req.user.id, req.params.id);
+        // Si target es admin, seguir a TODOS los admins (identidad Wearo compartida)
+        if (isTargetAdmin) {
+            await followModel.followAllAdmins(req.user.id);
+        } else {
+            await followModel.follow(req.user.id, req.params.id);
+        }
         const [followers, following] = await Promise.all([
             followModel.countFollowers(req.params.id),
             followModel.countFollowing(req.params.id),
@@ -144,10 +180,15 @@ const followUser = async (req, res) => {
 // DELETE /api/v1/users/:id/follow — Dejar de seguir o cancelar solicitud
 const unfollowUser = async (req, res) => {
     try {
-        // Intentar dejar de seguir
-        await followModel.unfollow(req.user.id, req.params.id);
-        // Tambien cancelar solicitud pendiente si existe
-        await followModel.cancelFollowRequest(req.user.id, req.params.id);
+        // Comprobar si el target es admin (identidad Wearo compartida)
+        const targetRole = await dbQuery('SELECT role FROM users WHERE id = $1', [req.params.id]);
+        if (targetRole.rows[0]?.role === 'admin') {
+            // Dejar de seguir a TODOS los admins
+            await followModel.unfollowAllAdmins(req.user.id);
+        } else {
+            await followModel.unfollow(req.user.id, req.params.id);
+            await followModel.cancelFollowRequest(req.user.id, req.params.id);
+        }
         const [followers, following] = await Promise.all([
             followModel.countFollowers(req.params.id),
             followModel.countFollowing(req.params.id),
@@ -164,7 +205,14 @@ const getFollowers = async (req, res) => {
     try {
         const limit  = parseInt(req.query.limit, 10) || 30;
         const offset = parseInt(req.query.offset, 10) || 0;
-        const users  = await followModel.getFollowers(req.params.id, { limit, offset });
+        // Si target es admin, agregar seguidores de TODOS los admins
+        const targetRole = await dbQuery('SELECT role FROM users WHERE id = $1', [req.params.id]);
+        let users;
+        if (targetRole.rows[0]?.role === 'admin') {
+            users = await followModel.getFollowersOfAllAdmins({ limit, offset });
+        } else {
+            users = await followModel.getFollowers(req.params.id, { limit, offset });
+        }
         res.json({ users });
     } catch (err) {
         console.error('Error getFollowers:', err);
@@ -177,7 +225,14 @@ const getFollowing = async (req, res) => {
     try {
         const limit  = parseInt(req.query.limit, 10) || 30;
         const offset = parseInt(req.query.offset, 10) || 0;
-        const users  = await followModel.getFollowing(req.params.id, { limit, offset });
+        // Si target es admin, agregar seguidos de TODOS los admins
+        const targetRole = await dbQuery('SELECT role FROM users WHERE id = $1', [req.params.id]);
+        let users;
+        if (targetRole.rows[0]?.role === 'admin') {
+            users = await followModel.getFollowingOfAllAdmins({ limit, offset });
+        } else {
+            users = await followModel.getFollowing(req.params.id, { limit, offset });
+        }
         res.json({ users });
     } catch (err) {
         console.error('Error getFollowing:', err);

@@ -1,7 +1,7 @@
 {
-  "name": "outfitvault-backend",
+  "name": "wearo-backend",
   "version": "1.0.0",
-  "description": "API REST de OutfitVault — gestor de armario personal",
+  "description": "API REST de Wearo — gestor de armario personal",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

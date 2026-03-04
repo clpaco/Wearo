@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, Image, TextInput,
     StyleSheet, Alert, ActivityIndicator, StatusBar,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchGarments } from '../store/wardrobeSlice';
@@ -11,6 +12,7 @@ import { useTheme } from '../hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { IMAGE_BASE_URL } from '../services/api';
 import ScreenHeader from '../components/ScreenHeader';
+import * as ImagePicker from 'expo-image-picker';
 
 const OCCASIONS = ['casual', 'trabajo', 'formal', 'deporte', 'fiesta', 'otro'];
 
@@ -20,6 +22,7 @@ const CreateOutfitScreen = ({ navigation }) => {
     const [notes, setNotes] = useState('');
     const [selectedIds, setSelectedIds] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [coverImageUri, setCoverImageUri] = useState(null);
 
     const dispatch = useDispatch();
     const { garments } = useSelector((state) => state.wardrobe);
@@ -36,6 +39,21 @@ const CreateOutfitScreen = ({ navigation }) => {
         );
     };
 
+    const pickCoverImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permiso necesario', 'Necesitamos acceso a tus fotos.');
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.7,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+            setCoverImageUri(result.assets[0].uri);
+        }
+    };
+
     const handleCreate = async () => {
         if (!name.trim()) {
             Alert.alert('Error', 'Dale un nombre al outfit');
@@ -50,6 +68,7 @@ const CreateOutfitScreen = ({ navigation }) => {
         try {
             await dispatch(addOutfit({
                 name: name.trim(), occasion, notes: notes.trim(), garmentIds: selectedIds,
+                coverImageUri: coverImageUri || undefined,
             })).unwrap();
             navigation.goBack();
         } catch (err) {
@@ -96,6 +115,36 @@ const CreateOutfitScreen = ({ navigation }) => {
 
             {/* Header */}
             <ScreenHeader title="Crear Outfit" onBack={() => navigation.goBack()} />
+
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+            {/* Cover image */}
+            <View style={styles.coverSection}>
+                {coverImageUri ? (
+                    <View style={styles.coverPreviewWrap}>
+                        <Image source={{ uri: coverImageUri }} style={styles.coverPreview} resizeMode="cover" />
+                        <TouchableOpacity
+                            style={styles.coverRemoveBtn}
+                            onPress={() => setCoverImageUri(null)}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="close-circle" size={28} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.coverPickerBtn, { backgroundColor: c.surfaceVariant, borderColor: c.border }]}
+                        onPress={pickCoverImage}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="camera-outline" size={28} color={c.primary} />
+                        <Text style={[styles.coverPickerText, { color: c.primary }]}>Foto de portada</Text>
+                        <Text style={[styles.coverPickerHint, { color: c.textMuted }]}>Opcional</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
 
             {/* Nombre */}
             <View style={styles.fieldRow}>
@@ -160,6 +209,7 @@ const CreateOutfitScreen = ({ navigation }) => {
                     </Text>
                 )}
             </TouchableOpacity>
+            </KeyboardAvoidingView>
         </View>
     );
 };
@@ -172,7 +222,23 @@ const styles = StyleSheet.create({
     },
     backBtn: { fontSize: 16, fontWeight: '600' },
     headerTitle: { fontSize: 20, fontWeight: '700' },
-    fieldRow: { paddingHorizontal: 16, paddingTop: 16 },
+
+    // Cover image
+    coverSection: { paddingHorizontal: 16, paddingTop: 16 },
+    coverPreviewWrap: { position: 'relative', borderRadius: 14, overflow: 'hidden' },
+    coverPreview: { width: '100%', height: 180, borderRadius: 14 },
+    coverRemoveBtn: {
+        position: 'absolute', top: 8, right: 8,
+        backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 14,
+    },
+    coverPickerBtn: {
+        alignItems: 'center', justifyContent: 'center',
+        height: 100, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', gap: 4,
+    },
+    coverPickerText: { fontSize: 14, fontWeight: '700' },
+    coverPickerHint: { fontSize: 12 },
+
+    fieldRow: { paddingHorizontal: 16, paddingTop: 12 },
     nameInput: {
         borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16,
     },

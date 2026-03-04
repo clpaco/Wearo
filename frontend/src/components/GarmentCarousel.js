@@ -8,7 +8,7 @@ import { useTheme } from '../hooks/useTheme';
 const FALLBACK_WIDTH = Dimensions.get('window').width;
 const AUTO_INTERVAL = 3500;
 
-const GarmentCarousel = ({ garments = [], height = 300 }) => {
+const GarmentCarousel = ({ garments = [], photos = [], height = 300, hidePhotoLabel = false }) => {
     const flatRef = useRef(null);
     const [activeIdx, setActiveIdx] = useState(0);
     const [itemWidth, setItemWidth] = useState(FALLBACK_WIDTH);
@@ -17,7 +17,10 @@ const GarmentCarousel = ({ garments = [], height = 300 }) => {
     const { theme } = useTheme();
     const c = theme.colors;
 
-    const count = garments.length;
+    // Build combined data: photos first, then garments
+    const photoItems = photos.map((url, i) => ({ _type: 'photo', _photoUrl: url, id: `photo-${i}` }));
+    const data = [...photoItems, ...garments];
+    const count = data.length;
 
     const onContainerLayout = (e) => {
         const w = e.nativeEvent.layout.width;
@@ -70,30 +73,50 @@ const GarmentCarousel = ({ garments = [], height = 300 }) => {
         length: itemWidth, offset: itemWidth * index, index,
     });
 
-    const renderSlide = ({ item: g, index: i }) => (
-        <View style={[styles.slide, { width: itemWidth, height }]}>
-            {g.image_url ? (
-                <Image
-                    source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }}
-                    style={[styles.img, { height }]}
-                    resizeMode="cover"
-                />
-            ) : (
-                <View style={[styles.placeholder, { height, backgroundColor: c.surfaceVariant }]}>
-                    <Ionicons name="shirt-outline" size={48} color={c.textMuted} />
-                    <Text style={[styles.placeholderName, { color: c.textMuted }]} numberOfLines={1}>
-                        {g.name}
-                    </Text>
+    const renderSlide = ({ item: g, index: i }) => {
+        // Photo slide (from post photos)
+        if (g._type === 'photo') {
+            return (
+                <View style={[styles.slide, { width: itemWidth, height }]}>
+                    <Image
+                        source={{ uri: g._photoUrl.startsWith('http') ? g._photoUrl : `${IMAGE_BASE_URL}${g._photoUrl}` }}
+                        style={[styles.img, { height }]}
+                        resizeMode="cover"
+                    />
+                    {!hidePhotoLabel && (
+                    <View style={styles.overlay}>
+                        <Text style={styles.overlayText} numberOfLines={1}>Portada</Text>
+                    </View>
+                    )}
                 </View>
-            )}
-            <View style={styles.overlay}>
-                <Text style={styles.overlayText} numberOfLines={1}>{g.name}</Text>
-                {g.category && (
-                    <Text style={styles.overlayCategory}>{g.category}</Text>
+            );
+        }
+        // Garment slide
+        return (
+            <View style={[styles.slide, { width: itemWidth, height }]}>
+                {g.image_url ? (
+                    <Image
+                        source={{ uri: `${IMAGE_BASE_URL}${g.image_url}` }}
+                        style={[styles.img, { height }]}
+                        resizeMode="cover"
+                    />
+                ) : (
+                    <View style={[styles.placeholder, { height, backgroundColor: c.surfaceVariant }]}>
+                        <Ionicons name="shirt-outline" size={48} color={c.textMuted} />
+                        <Text style={[styles.placeholderName, { color: c.textMuted }]} numberOfLines={1}>
+                            {g.name}
+                        </Text>
+                    </View>
                 )}
+                <View style={styles.overlay}>
+                    <Text style={styles.overlayText} numberOfLines={1}>{g.name}</Text>
+                    {g.category && (
+                        <Text style={styles.overlayCategory}>{g.category}</Text>
+                    )}
+                </View>
             </View>
-        </View>
-    );
+        );
+    };
 
     if (count === 0) return null;
 
@@ -101,9 +124,8 @@ const GarmentCarousel = ({ garments = [], height = 300 }) => {
         <View onLayout={onContainerLayout}>
             <FlatList
                 ref={flatRef}
-                data={garments}
+                data={data}
                 horizontal
-                pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 nestedScrollEnabled={true}
                 onScroll={onScroll}
@@ -116,11 +138,12 @@ const GarmentCarousel = ({ garments = [], height = 300 }) => {
                 renderItem={renderSlide}
                 snapToInterval={itemWidth}
                 snapToAlignment="start"
+                disableIntervalMomentum={true}
             />
 
             {count > 1 && (
                 <View style={styles.dots}>
-                    {garments.map((_, i) => (
+                    {data.map((_, i) => (
                         <View
                             key={i}
                             style={[

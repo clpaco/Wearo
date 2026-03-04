@@ -1,19 +1,26 @@
 // Modelo de Outfit — operaciones CRUD con relación many-to-many a prendas
 const { query, pool } = require('../config/db');
 
+// Auto-migration: añadir columna cover_image si no existe
+(async () => {
+    try {
+        await query(`ALTER TABLE outfits ADD COLUMN IF NOT EXISTS cover_image VARCHAR(255)`);
+    } catch (_) {}
+})();
+
 // Crear un outfit con sus prendas
 const create = async (userId, outfitData) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        const { name, occasion, season, notes, garmentIds } = outfitData;
+        const { name, occasion, season, notes, garmentIds, coverImage } = outfitData;
 
         // Insertar outfit
         const outfitResult = await client.query(
-            `INSERT INTO outfits (user_id, name, occasion, season, notes)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [userId, name, occasion, season, notes]
+            `INSERT INTO outfits (user_id, name, occasion, season, notes, cover_image)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [userId, name, occasion, season, notes, coverImage || null]
         );
         const outfit = outfitResult.rows[0];
 
@@ -107,7 +114,7 @@ const update = async (userId, outfitId, outfitData) => {
     try {
         await client.query('BEGIN');
 
-        const { name, occasion, season, notes, isFavorite, garmentIds } = outfitData;
+        const { name, occasion, season, notes, isFavorite, garmentIds, coverImage } = outfitData;
 
         await client.query(
             `UPDATE outfits SET
@@ -116,9 +123,10 @@ const update = async (userId, outfitId, outfitData) => {
         season = COALESCE($5, season),
         notes = COALESCE($6, notes),
         is_favorite = COALESCE($7, is_favorite),
+        cover_image = COALESCE($8, cover_image),
         updated_at = NOW()
        WHERE id = $1 AND user_id = $2`,
-            [outfitId, userId, name, occasion, season, notes, isFavorite]
+            [outfitId, userId, name, occasion, season, notes, isFavorite, coverImage]
         );
 
         // Reemplazar prendas si se enviaron

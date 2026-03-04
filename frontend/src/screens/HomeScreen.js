@@ -75,7 +75,8 @@ const HomeScreen = ({ navigation }) => {
     const [suggestionsLoading, setSuggestionsLoading] = useState(false);
     const debounceRef = useRef(null);
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todayEntry = entries.find((e) => {
         const d = typeof e.date === 'string' ? e.date.split('T')[0] : e.date;
         return d === todayStr;
@@ -282,17 +283,47 @@ const HomeScreen = ({ navigation }) => {
 
                 {/* Outfit del día */}
                 <Text style={[styles.sectionTitle, { color: c.text }]}>Outfit del día</Text>
-                <Card padding={16}>
-                    {todayEntry?.outfit ? (
+                <Card padding={todayEntry?.outfit_cover_image ? 0 : 16}>
+                    {todayEntry?.outfit_id ? (
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => navigation.navigate('Calendario')}
+                        >
+                            {todayEntry.outfit_cover_image ? (
+                                <View>
+                                    <Image
+                                        source={{ uri: `${IMAGE_BASE_URL}${todayEntry.outfit_cover_image}` }}
+                                        style={styles.todayCoverImage}
+                                        resizeMode="cover"
+                                    />
+                                    <View style={styles.todayCoverOverlay}>
+                                        <Text style={styles.todayCoverName} numberOfLines={1}>
+                                            {todayEntry.outfit_name || 'Outfit'}
+                                        </Text>
+                                        <Ionicons name="chevron-forward" size={18} color="#FFF" />
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={[styles.todayRow, { padding: 16 }]}>
+                                    <View style={[styles.todayIcon, { backgroundColor: c.primaryLight + '30' }]}>
+                                        <Ionicons name="albums-outline" size={28} color={c.primary} />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={[styles.todayName, { color: c.text }]}>{todayEntry.outfit_name || 'Outfit'}</Text>
+                                    </View>
+                                    <View style={[styles.arrowBtn, { backgroundColor: c.primaryLight + '30' }]}>
+                                        <Ionicons name="chevron-forward" size={18} color={c.primary} />
+                                    </View>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    ) : todayEntry?.garments?.length > 0 ? (
                         <View style={styles.todayRow}>
                             <View style={[styles.todayIcon, { backgroundColor: c.primaryLight + '30' }]}>
-                                <Ionicons name="albums-outline" size={28} color={c.primary} />
+                                <Ionicons name="shirt-outline" size={28} color={c.primary} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 12 }}>
-                                <Text style={[styles.todayName, { color: c.text }]}>{todayEntry.outfit.nombre}</Text>
-                                {todayEntry.outfit.ocasion ? (
-                                    <Text style={[styles.todayOcc, { color: c.textSecondary }]}>{todayEntry.outfit.ocasion}</Text>
-                                ) : null}
+                                <Text style={[styles.todayName, { color: c.text }]}>{todayEntry.garments.length} prenda{todayEntry.garments.length !== 1 ? 's' : ''}</Text>
                             </View>
                             <TouchableOpacity
                                 onPress={() => navigation.navigate('Calendario')}
@@ -472,6 +503,15 @@ const styles = StyleSheet.create({
     todayIcon: { width: 56, height: 56, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     todayName: { fontSize: 16, fontWeight: '600' },
     todayOcc: { fontSize: 13, marginTop: 2, textTransform: 'capitalize' },
+    todayCoverImage: { width: '100%', height: 140, borderRadius: 14 },
+    todayCoverOverlay: {
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: 14, paddingVertical: 10,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        borderBottomLeftRadius: 14, borderBottomRightRadius: 14,
+    },
+    todayCoverName: { color: '#FFF', fontSize: 16, fontWeight: '700', flex: 1, marginRight: 8 },
     arrowBtn: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     noOutfitText: { fontSize: 14, marginBottom: 4 },
     linkText: { fontSize: 14, fontWeight: '600' },

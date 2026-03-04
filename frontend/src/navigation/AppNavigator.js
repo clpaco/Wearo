@@ -6,9 +6,10 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import { restoreSession } from '../store/authSlice';
+import { restoreSession, logoutUser } from '../store/authSlice';
 import { fetchMyProfile } from '../store/profileSlice';
 import { useTheme } from '../hooks/useTheme';
+import api from '../services/api';
 
 // Pantallas
 import LoginScreen from '../screens/LoginScreen';
@@ -28,6 +29,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import MessagesScreen from '../screens/MessagesScreen';
 import ChatScreen from '../screens/ChatScreen';
+import AdminScreen from '../screens/AdminScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -84,6 +86,7 @@ const ProfileStack = () => (
         <Stack.Screen name="UserProfile" component={ProfileScreen} />
         <Stack.Screen name="Messages" component={MessagesScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="Admin" component={AdminScreen} />
     </Stack.Navigator>
 );
 
@@ -91,6 +94,8 @@ const ProfileStack = () => (
 
 const AppTabs = () => {
     const { theme } = useTheme();
+    const { user } = useSelector((state) => state.auth);
+    const isAdmin = user?.role === 'admin';
 
     return (
         <Tab.Navigator
@@ -124,10 +129,10 @@ const AppTabs = () => {
                 },
             })}
         >
-            <Tab.Screen name="Inicio" component={HomeStack} />
-            <Tab.Screen name="Armario" component={WardrobeStack} />
-            <Tab.Screen name="Outfits" component={OutfitsStack} />
-            <Tab.Screen name="Calendario" component={CalendarStack} />
+            {!isAdmin && <Tab.Screen name="Inicio" component={HomeStack} />}
+            {!isAdmin && <Tab.Screen name="Armario" component={WardrobeStack} />}
+            {!isAdmin && <Tab.Screen name="Outfits" component={OutfitsStack} />}
+            {!isAdmin && <Tab.Screen name="Calendario" component={CalendarStack} />}
             <Tab.Screen name="Social" component={SocialStack} />
             <Tab.Screen name="Perfil" component={ProfileStack} />
         </Tab.Navigator>
@@ -162,6 +167,12 @@ const AppNavigator = () => {
 
     useEffect(() => {
         dispatch(restoreSession());
+    }, [dispatch]);
+
+    // Registrar callback para forzar logout cuando la cuenta es desactivada
+    useEffect(() => {
+        api._onForceLogout = () => dispatch(logoutUser());
+        return () => { api._onForceLogout = null; };
     }, [dispatch]);
 
     // Fetch profile when authenticated to check onboarding

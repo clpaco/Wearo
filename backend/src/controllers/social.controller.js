@@ -1,34 +1,54 @@
 // Controlador Social — feed público, compartir outfits y likes
 const socialModel = require('../models/social.model');
+const userModel = require('../models/user.model');
 
-// POST /api/v1/social/share — Compartir outfit al feed público (con fotos opcionales)
+// POST /api/v1/social/share — Compartir outfit o prendas al feed público (con fotos opcionales)
 const share = async (req, res) => {
     try {
         const { outfitId, caption } = req.body;
-        if (!outfitId) {
-            return res.status(400).json({ error: true, mensaje: 'outfitId es obligatorio' });
+        let garmentIds = req.body.garmentIds || [];
+
+        // Parse garmentIds si viene como string (FormData)
+        if (typeof garmentIds === 'string') {
+            try { garmentIds = JSON.parse(garmentIds); } catch { garmentIds = []; }
         }
 
-        const existing = await socialModel.isShared(req.user.id, outfitId);
-        if (existing) {
-            return res.status(409).json({ error: true, mensaje: 'Este outfit ya está compartido' });
+        if (!outfitId && (!garmentIds || garmentIds.length === 0)) {
+            // Admin puede publicar anuncios sin outfit ni prendas
+            const currentUser = await userModel.findById(req.user.id);
+            if (!currentUser || currentUser.role !== 'admin') {
+                return res.status(400).json({ error: true, mensaje: 'Selecciona un outfit o al menos una prenda' });
+            }
+        }
+
+        if (outfitId) {
+            const existing = await socialModel.isShared(req.user.id, outfitId);
+            if (existing) {
+                return res.status(409).json({ error: true, mensaje: 'Este outfit ya está compartido' });
+            }
         }
 
         // Recoger rutas de fotos subidas por multer
         const photos = (req.files || []).map((f) => `/uploads/social/${f.filename}`);
 
-        const post = await socialModel.shareOutfit(req.user.id, outfitId, caption || '', photos);
-        res.status(201).json({ mensaje: 'Outfit compartido al feed', post });
+        const post = await socialModel.shareOutfit(req.user.id, outfitId || null, caption || '', photos, garmentIds.map(Number));
+        res.status(201).json({ mensaje: 'Publicación compartida al feed', post });
     } catch (err) {
-        console.error('Error compartiendo outfit:', err);
-        res.status(500).json({ error: true, mensaje: 'Error al compartir outfit' });
+        console.error('Error compartiendo:', err);
+        res.status(500).json({ error: true, mensaje: 'Error al compartir' });
     }
 };
 
 // DELETE /api/v1/social/:id — Quitar outfit del feed
 const unshare = async (req, res) => {
     try {
-        const removed = await socialModel.unshareOutfit(req.user.id, req.params.id);
+        const currentUser = await userModel.findById(req.user.id);
+        let removed;
+        if (currentUser && currentUser.role === 'admin') {
+            removed = await socialModel.deletePostAdmin(req.params.id, req.user.id);
+        } else {
+            removed = await socialModel.unshareOutfit(req.user.id, req.params.id);
+        }
         if (!removed) {
             return res.status(404).json({ error: true, mensaje: 'Post no encontrado o no te pertenece' });
         }
@@ -137,14 +157,14 @@ async function getComments(req, res) {
 // POST /api/v1/social/:id/comments — Añadir comentario
 async function addComment(req, res) {
     try {
-        const { text } = req.body;
+        const { text, parentId } = req.body;
         if (!text || !text.trim()) {
             return res.status(400).json({ error: true, mensaje: 'El texto del comentario es obligatorio' });
         }
         if (text.trim().length > 500) {
             return res.status(400).json({ error: true, mensaje: 'El comentario no puede superar 500 caracteres' });
         }
-        const comment = await socialModel.addComment(req.user.id, req.params.id, text.trim());
+        const comment = await socialModel.addComment(req.user.id, req.params.id, text.trim(), parentId || null);
         res.status(201).json({ mensaje: 'Comentario añadido', comment });
     } catch (err) {
         console.error('Error añadiendo comentario:', err);
@@ -155,7 +175,13 @@ async function addComment(req, res) {
 // DELETE /api/v1/social/:id/comments/:commentId — Eliminar comentario
 async function deleteComment(req, res) {
     try {
-        const removed = await socialModel.deleteComment(req.user.id, req.params.commentId);
+        const currentUser = await userModel.findById(req.user.id);
+        let removed;
+        if (currentUser && currentUser.role === 'admin') {
+            removed = await socialModel.deleteCommentAdmin(req.params.commentId);
+        } else {
+            removed = await socialModel.deleteComment(req.user.id, req.params.commentId);
+        }
         if (!removed) {
             return res.status(404).json({ error: true, mensaje: 'Comentario no encontrado o no te pertenece' });
         }

@@ -14,6 +14,7 @@ backend/uploads/temp/*
 frontend/.expo/
 frontend/dist/
 frontend/web-build/
+*.ipa
 
 # OS files
 .DS_Store

@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.clpaco.wearo",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -26,7 +30,11 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://wearo-production.up.railway.app"
-    }
+      "apiUrl": "https://wearo-production.up.railway.app",
+      "eas": {
+        "projectId": "53a97c57-88d7-4a9c-a9b2-12052343eb5b"
+      }
+    },
+    "owner": "clpaco"
   }
 }

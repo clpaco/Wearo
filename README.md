@@ -224,7 +224,22 @@ Wearo/
 
 ---
 
-## Build iOS (.ipa)
+## Builds Nativos
+
+### Android (.apk)
+
+Requiere una cuenta gratuita en [Expo](https://expo.dev/signup):
+
+```bash
+cd frontend
+npm install -g eas-cli
+eas login
+eas build --platform android --profile preview
+```
+
+EAS compila en la nube y te da un link de descarga del APK. Instalalo directamente en cualquier dispositivo Android.
+
+### iOS (.ipa)
 
 Si tienes acceso a un Mac con Xcode:
 
